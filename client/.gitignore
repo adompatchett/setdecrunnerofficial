@@ -1,0 +1,5 @@
+
+# app data
+uploads/
+client/dist/
+server/.env
