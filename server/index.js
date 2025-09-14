@@ -377,6 +377,7 @@ app.get('/api/checkout/sessions/:id', async (req, res) => {
   }
 });
 
+
 /* ----------------------------- Tenant routes ------------------------------ */
 // Apply auth + membership to each tenant resource router explicitly
 const tenantMw = [authRequired, requireMembership];

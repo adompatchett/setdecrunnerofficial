@@ -772,7 +772,7 @@
   <input v-model="cbSearch" placeholder="Search users…" class="input" />
   <button type="button" class="btn" @click.stop.prevent="searchCompletedUsers">Search</button>
   <button
-    v-if="rs.pdCompletedBy"  <!-- CHANGED -->
+    v-if="rs.pdCompletedBy"  
     type="button"
     class="btn btn--ghost"
     @click.stop.prevent="clearCompletedBy"
@@ -793,7 +793,7 @@
 
 <div class="field">
   <input
-    type="date"
+    type="date" id="pdCompletedOn"
     v-model="dateFinishedStr"
     @change="savePickupDelivering"
   />

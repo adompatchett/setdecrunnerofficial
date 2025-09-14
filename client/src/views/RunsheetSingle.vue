@@ -1,289 +1,286 @@
 <!-- client/src/views/RunSheetSingle.vue -->
 <template>
-    <div class="page">
-      <!-- Hide NavBar on print -->
-      <div class="no-print">
-        <NavBar :me="me" @logout="logout" />
+  <div class="page">
+    <!-- Hide NavBar on print -->
+    <div class="no-print">
+      <NavBar :me="me" @logout="logout" />
+    </div>
+
+    <div class="sheet-wrap">
+      <!-- IMPORTANT: ref used for print capture -->
+      <div class="sheet" ref="sheetEl">
+        <!-- Header -->
+        <div class="row header">
+          <div class="h-left">
+            <div class="label">PURCHASE / RENTAL:</div>
+          </div>
+          <div class="h-center">
+            <div class="title">SET DECORATION</div>
+            <div class="subtitle">TRANSPORT / RENTAL</div>
+          </div>
+          <div class="h-right">
+            <div class="line-pair">
+              <span>Set:&nbsp;</span><span class="line">{{ setLabel || ' ' }}</span>
+            </div>
+            <div class="line-pair">
+              <span>#&nbsp;</span><span class="line line--short">{{ shortId }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pick/Return dates -->
+        <div class="row dates">
+          <div class="half">
+            <span class="box" :class="{checked: !!rs?.pickupDate}"></span>
+            <span>Pick-Up Date:&nbsp;</span><span class="line">{{ fmt(rs?.pickupDate) || ' ' }}</span>
+          </div>
+          <div class="half">
+            <span class="box" :class="{checked: !!rs?.returnDate}"></span>
+            <span>Return Date:&nbsp;</span><span class="line">{{ fmt(rs?.returnDate) || ' ' }}</span>
+          </div>
+        </div>
+
+        <!-- Address / Supplier -->
+        <div class="row addr-supplier">
+          <!-- Production company block -->
+          <div class="panel addr">
+  <div class="addr-line strong">{{ companyBlock.name }}</div>
+  <div class="addr-line" v-if="companyBlock.showTitle">"{{ companyBlock.title }}"</div>
+  <div class="addr-line" v-if="companyBlock.address">{{ companyBlock.address }}</div>
+  <div class="addr-line" v-if="companyBlock.phone">{{ companyBlock.phone }}</div>
+          </div>
+          <!-- Supplier -->
+          <div class="panel supplier">
+            <div class="field"><span class="label-sm">SUPPLIER:</span><span class="fill">{{ supplierName }}</span></div>
+            <div class="field"><span class="fill">{{ supplierLine2 }}</span></div>
+            <div class="field"><span class="fill">{{ supplierLine3 }}</span></div>
+            <div class="field"><span class="fill">{{ supplierLine4 }}</span></div>
+            <div class="field"><span class="label-sm">TEL:</span><span class="fill">{{ supplierPhone }}</span></div>
+            <div class="field">
+              <span class="label-sm">CONTACT:</span><span class="fill">{{ supplierContact }}</span>
+              <span class="label-sm hrs">HOURS</span><span class="fill fill--hrs">{{ supplierHours }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Items table -->
+        <div class="table">
+          <div class="thead">
+            <div class="th th-item">ITEM</div>
+            <div class="th th-desc">DESCRIPTION</div>
+          </div>
+          <div class="tbody">
+            <div class="tr" v-for="(row, i) in tableRows" :key="i">
+              <div class="td td-item">{{ row.item }}</div>
+              <div class="td td-desc">{{ row.desc }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Destination + Contacts + Purchase/Payment -->
+        <div class="row lower">
+          <!-- Destination choices -->
+          <div class="panel dest">
+            <div class="checkline">
+              <span class="box" :class="{checked: rs?.postLocation==='hold_on_truck'}"></span>
+              <span>HOLD ON TRUCK</span>
+            </div>
+            <div class="checkline">
+              <span class="box" :class="{checked: rs?.postLocation==='setdec_storage'}"></span>
+              <span>SET DEC STORAGE</span>
+              <span class="fillline"></span>
+            </div>
+            <div class="checkline">
+              <span class="box" :class="{checked: rs?.postLocation==='office'}"></span>
+              <span>OFFICE</span>
+              <span class="fillline"></span>
+            </div>
+            <div class="checkline">
+              <span class="box" :class="{checked: rs?.postLocation==='address_below'}"></span>
+              <span>ADDRESS BELOW</span>
+              <span class="fillline">{{ rs?.postLocation==='address_below' ? (rs?.postAddress || '') : '' }}</span>
+            </div>
+          </div>
+
+          <!-- Contacts -->
+          <div class="panel contacts">
+            <div v-for="p in contactRows" :key="p.key" class="contact">
+              <span class="box" :class="{ checked: p.isPrimary }"></span>
+              <span class="name">{{ p.name }}</span>
+              <span v-if="p.role" class="role">({{ p.role }})</span>
+              <span v-if="p.phone || p.email" class="sep"> — </span>
+              <span v-if="p.phone" class="phone">{{ p.phone }}</span>
+              <span v-if="p.phone && p.email" class="dot"> · </span>
+              <span v-if="p.email" class="email">{{ p.email }}</span>
+            </div>
+
+            <div v-if="!contactRows.length" class="contact">
+              <span class="box"></span>
+              <span class="name">No contacts</span>
+            </div>
+          </div>
+
+          <!-- Purchase / Payment -->
+          <div class="panel pay">
+            <div class="pay-grid">
+              <div class="cell">
+                <div class="mini">GET INVOICE</div>
+                <div class="inline">
+                  <span>YES</span><span class="box" :class="{checked: !!rs?.getInvoice}"></span>
+                  <span class="gap"></span>
+                  <span>NO</span><span class="box" :class="{checked: rs && !rs.getInvoice}"></span>
+                </div>
+              </div>
+
+              <div class="cell">
+                <div class="mini">GET DEPOSIT</div>
+                <div class="inline">
+                  <span>YES</span><span class="box" :class="{checked: !!rs?.getDeposit}"></span>
+                  <span class="gap"></span>
+                  <span>NO</span><span class="box" :class="{checked: rs && !rs.getDeposit}"></span>
+                </div>
+              </div>
+
+              <div class="cell">
+                <div class="mini">PAID</div>
+                <span class="box" :class="{checked: !!rs?.paid}"></span>
+              </div>
+
+              <div class="cell wide">
+                <div class="mini">CHEQUE #</div>
+                <div class="uline">{{ rs?.chequeNumber || ' ' }}</div>
+              </div>
+
+              <div class="cell">
+                <div class="mini">PO.#</div>
+                <div class="uline">{{ rs?.poNumber || ' ' }}</div>
+              </div>
+
+              <div class="cell wide">
+                <div class="mini">CHEQUE / CASH REC’D BY</div>
+                <div class="uline">{{ rs?.paymentReceivedBy || rs?.receivedBy || ' ' }}</div>
+              </div>
+
+              <div class="cell">
+                <div class="mini">AMOUNT</div>
+                <div class="uline">{{ money(rs?.amount) || ' ' }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PU/Delivering + Return/Drop Off -->
+        <div class="row actions">
+          <div class="panel act">
+            <div class="cap">
+              <span class="opt">PICK UP</span>
+              <span class="box" :class="{ checked: rs?.pdType === 'pickup' }"></span>
+
+              <span class="sp"></span>
+
+              <span class="opt">DELIVERING</span>
+              <span class="box" :class="{ checked: rs?.pdType === 'delivering' }"></span>
+
+              <span class="sp"></span>
+
+              <span class="opt">TAKE CHEQUE</span>
+              <span class="box" :class="{ checked: rs?.pdPaymentMethod === 'cheque' }"></span>
+
+              <span class="sp"></span>
+
+              <span class="opt">CASH</span>
+              <span class="box" :class="{ checked: rs?.pdPaymentMethod === 'cash' }"></span>
+            </div>
+            <div class="line-row">
+              <span class="mini">DATE:</span><span class="line">{{ fmt(rs?.pdDate) || ' ' }}</span>
+              <span class="mini">TIME:</span><span class="line line--short">{{ rs?.pdTime || ' ' }}</span>
+            </div>
+            <div class="line-row">
+              <span class="mini">INSTRUCTIONS:</span><span class="line line--grow">{{ rs?.pdInstructions || ' ' }}</span>
+            </div>
+            <div class="line-row">
+              <span class="mini">COMPLETED BY:</span><span class="line">{{ userLabel(rs?.pdCompletedBy) || ' ' }}</span>
+              <span class="mini">DATE:</span><span class="line line--short">{{ fmt(rs?.pdCompletedOn) || ' ' }}</span>
+            </div>
+          </div>
+
+          <div class="panel act">
+            <div class="cap">
+              RETURN / DROP OFF
+
+              <span class="sp"></span>
+
+              <span class="opt">PU</span>
+              <span class="box" :class="{ checked: rs?.rdType === 'pu' }"></span>
+
+              <span class="sp"></span>
+
+              <span class="opt">TAKE</span>
+              <span class="box" :class="{ checked: rs?.rdType === 'take' }"></span>
+
+              <span class="sp"></span>
+
+              CHEQUE
+              <span class="box" :class="{ checked: !!rs?.rdCheque }"></span>
+            </div>
+            <div class="line-row">
+              <span class="mini">DATE:</span><span class="line">{{ fmt(rs?.rdDate) || ' ' }}</span>
+              <span class="mini">TIME:</span><span class="line line--short">{{ rs?.rdTime || ' ' }}</span>
+            </div>
+            <div class="line-row">
+              <span class="mini">INSTRUCTIONS:</span><span class="line line--grow">{{ rs?.rdInstructions || ' ' }}</span>
+            </div>
+            <div class="line-row">
+              <span class="mini">COMPLETED BY:</span><span class="line">{{ userLabel(rs?.rdCompletedBy) || ' ' }}</span>
+              <span class="mini">DATE:</span><span class="line line--short">{{ fmt(rs?.rdCompletedOn) || ' ' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- QC / Signature -->
+        <div class="row qc panel">
+          <div class="mini">ABOVE ITEMS RETURNED IN GOOD CONDITION:</div>
+          <span class="line line--short">{{ boolLabel(rs?.qcItemsGood) }}</span>
+          <span class="mini">SIGNATURE</span>
+          <span class="sigwrap line line--wide">
+            <img v-if="rs?.qcSignatureData" :src="rs.qcSignatureData" alt="Signature" />
+          </span>
+          <span class="mini">DATE:</span>
+          <span class="line line--short">{{ fmt(rs?.rdCompletedOn || rs?.pdCompletedOn) || ' ' }}</span>
+        </div>
       </div>
-  
-      <div class="sheet-wrap">
-        <!-- IMPORTANT: ref used for print capture -->
-        <div class="sheet" ref="sheetEl">
-          <!-- Header -->
-          <div class="row header">
-            <div class="h-left">
-              <div class="label">PURCHASE / RENTAL:</div>
-            </div>
-            <div class="h-center">
-              <div class="title">SET DECORATION</div>
-              <div class="subtitle">TRANSPORT / RENTAL</div>
-            </div>
-            <div class="h-right">
-              <div class="line-pair">
-                <span>Set:&nbsp;</span><span class="line">{{ setLabel || ' ' }}</span>
-              </div>
-              <div class="line-pair">
-                <span>#&nbsp;</span><span class="line line--short">{{ shortId }}</span>
-              </div>
-            </div>
-          </div>
-  
-          <!-- Pick/Return dates -->
-          <div class="row dates">
-            <div class="half">
-              <span class="box" :class="{checked: !!rs?.pickupDate}"></span>
-              <span>Pick-Up Date:&nbsp;</span><span class="line">{{ fmt(rs?.pickupDate) || ' ' }}</span>
-            </div>
-            <div class="half">
-              <span class="box" :class="{checked: !!rs?.returnDate}"></span>
-              <span>Return Date:&nbsp;</span><span class="line">{{ fmt(rs?.returnDate) || ' ' }}</span>
-            </div>
-          </div>
-  
-          <!-- Address / Supplier -->
-          <div class="row addr-supplier">
-            <div class="panel addr">
-              <div class="addr-line strong">{{ companyBlock.name }}</div>
-              <div class="addr-line" v-if="companyBlock.showTitle">"{{ companyBlock.title }}"</div>
-              <div class="addr-line" v-if="companyBlock.addr1">{{ companyBlock.addr1 }}</div>
-              <div class="addr-line" v-if="companyBlock.addr2">{{ companyBlock.addr2 }}</div>
-              <div class="addr-line" v-if="companyBlock.addr3">{{ companyBlock.addr3 }}</div>
-              <div class="addr-line" v-if="companyBlock.phone">{{ companyBlock.phone }}</div>
-            </div>
-  
-            <div class="panel supplier">
-              <div class="field"><span class="label-sm">SUPPLIER:</span><span class="fill">{{ supplierName }}</span></div>
-              <div class="field"><span class="fill">{{ supplierLine2 }}</span></div>
-              <div class="field"><span class="fill">{{ supplierLine3 }}</span></div>
-              <div class="field"><span class="fill">{{ supplierLine4 }}</span></div>
-              <div class="field"><span class="label-sm">TEL:</span><span class="fill">{{ supplierPhone }}</span></div>
-              <div class="field">
-                <span class="label-sm">CONTACT:</span><span class="fill">{{ supplierContact }}</span>
-                <span class="label-sm hrs">HOURS</span><span class="fill fill--hrs">{{ supplierHours }}</span>
-              </div>
-            </div>
-          </div>
-  
-          <!-- Items table -->
-          <div class="table">
-            <div class="thead">
-              <div class="th th-item">ITEM</div>
-              <div class="th th-desc">DESCRIPTION</div>
-            </div>
-            <div class="tbody">
-              <div class="tr" v-for="(row, i) in tableRows" :key="i">
-                <div class="td td-item">{{ row.item }}</div>
-                <div class="td td-desc">{{ row.desc }}</div>
-              </div>
-            </div>
-          </div>
-  
-          <!-- Destination + Contacts + Purchase/Payment -->
-          <div class="row lower">
-            <!-- Destination choices -->
-            <div class="panel dest">
-              <div class="checkline">
-                <span class="box" :class="{checked: rs?.postLocation==='hold_on_truck'}"></span>
-                <span>HOLD ON TRUCK</span>
-              </div>
-              <div class="checkline">
-                <span class="box" :class="{checked: rs?.postLocation==='setdec_storage'}"></span>
-                <span>SET DEC STORAGE</span>
-                <span class="fillline"></span>
-              </div>
-              <div class="checkline">
-                <span class="box" :class="{checked: rs?.postLocation==='office'}"></span>
-                <span>OFFICE</span>
-                <span class="fillline"></span>
-              </div>
-              <div class="checkline">
-                <span class="box" :class="{checked: rs?.postLocation==='address_below'}"></span>
-                <span>ADDRESS BELOW</span>
-                <span class="fillline">{{ rs?.postLocation==='address_below' ? (rs?.postAddress || '') : '' }}</span>
-              </div>
-            </div>
-  
-            <!-- Contacts -->
-            <div class="panel contacts">
-              <div v-for="p in contactRows" :key="p.key" class="contact">
-                <span class="box" :class="{ checked: p.isPrimary }"></span>
-                <span class="name">{{ p.name }}</span>
-                <span v-if="p.role" class="role">({{ p.role }})</span>
-                <span v-if="p.phone || p.email" class="sep"> — </span>
-                <span v-if="p.phone" class="phone">{{ p.phone }}</span>
-                <span v-if="p.phone && p.email" class="dot"> · </span>
-                <span v-if="p.email" class="email">{{ p.email }}</span>
-              </div>
-  
-              <div v-if="!contactRows.length" class="contact">
-                <span class="box"></span>
-                <span class="name">No contacts</span>
-              </div>
-            </div>
-  
-            <!-- Purchase / Payment -->
-            <div class="panel pay">
-              <div class="pay-grid">
-                <div class="cell">
-                  <div class="mini">GET INVOICE</div>
-                  <div class="inline">
-                    <span>YES</span><span class="box" :class="{checked: !!rs?.getInvoice}"></span>
-                    <span class="gap"></span>
-                    <span>NO</span><span class="box" :class="{checked: rs && !rs.getInvoice}"></span>
-                  </div>
-                </div>
-  
-                <div class="cell">
-                  <div class="mini">GET DEPOSIT</div>
-                  <div class="inline">
-                    <span>YES</span><span class="box" :class="{checked: !!rs?.getDeposit}"></span>
-                    <span class="gap"></span>
-                    <span>NO</span><span class="box" :class="{checked: rs && !rs.getDeposit}"></span>
-                  </div>
-                </div>
-  
-                <div class="cell">
-                  <div class="mini">PAID</div>
-                  <span class="box" :class="{checked: !!rs?.paid}"></span>
-                </div>
-  
-                <div class="cell wide">
-                  <div class="mini">CHEQUE #</div>
-                  <div class="uline">{{ rs?.chequeNumber || ' ' }}</div>
-                </div>
-  
-                <div class="cell">
-                  <div class="mini">PO.#</div>
-                  <div class="uline">{{ rs?.poNumber || ' ' }}</div>
-                </div>
-  
-                <div class="cell wide">
-                  <div class="mini">CHEQUE / CASH REC’D BY</div>
-                  <div class="uline">{{ rs?.paymentReceivedBy || rs?.receivedBy || ' ' }}</div>
-                </div>
-  
-                <div class="cell">
-                  <div class="mini">AMOUNT</div>
-                  <div class="uline">{{ money(rs?.amount) || ' ' }}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-  
-          <!-- PU/Delivering + Return/Drop Off -->
-          <div class="row actions">
-            <div class="panel act">
-              <!-- PICK UP / DELIVERING  +  TAKE CHEQUE / CASH -->
-<div class="cap">
-  <span class="opt">PICK UP</span>
-  <span class="box" :class="{ checked: rs?.pdType === 'pickup' }"></span>
 
-  <span class="sp"></span>
-
-  <span class="opt">DELIVERING</span>
-  <span class="box" :class="{ checked: rs?.pdType === 'delivering' }"></span>
-
-  <span class="sp"></span>
-
-  <span class="opt">TAKE CHEQUE</span>
-  <span class="box" :class="{ checked: rs?.pdPaymentMethod === 'cheque' }"></span>
-
-  <span class="sp"></span>
-
-  <span class="opt">CASH</span>
-  <span class="box" :class="{ checked: rs?.pdPaymentMethod === 'cash' }"></span>
-</div>
-              <div class="line-row">
-                <span class="mini">DATE:</span><span class="line">{{ fmt(rs?.pdDate) || ' ' }}</span>
-                <span class="mini">TIME:</span><span class="line line--short">{{ rs?.pdTime || ' ' }}</span>
-              </div>
-              <div class="line-row">
-                <span class="mini">INSTRUCTIONS:</span><span class="line line--grow">{{ rs?.pdInstructions || ' ' }}</span>
-              </div>
-              <div class="line-row">
-                <span class="mini">COMPLETED BY:</span><span class="line">{{ userLabel(rs?.completedBy) || ' ' }}</span>
-                <span class="mini">DATE:</span><span class="line line--short">{{ fmt(rs?.dateFinished) || ' ' }}</span>
-              </div>
-            </div>
-  
-            <div class="panel act">
-              <!-- RETURN / DROP OFF  +  PU / TAKE  +  CHEQUE -->
-<div class="cap">
-  RETURN / DROP OFF
-
-  <span class="sp"></span>
-
-  <span class="opt">PU</span>
-  <span class="box" :class="{ checked: rs?.rdType === 'pu' }"></span>
-
-  <span class="sp"></span>
-
-  <span class="opt">TAKE</span>
-  <span class="box" :class="{ checked: rs?.rdType === 'take' }"></span>
-
-  <span class="sp"></span>
-
-  CHEQUE
-  <span class="box" :class="{ checked: !!rs?.rdCheque }"></span>
-</div>
-              <div class="line-row">
-                <span class="mini">DATE:</span><span class="line">{{ fmt(rs?.rdDate) || ' ' }}</span>
-                <span class="mini">TIME:</span><span class="line line--short">{{ rs?.rdTime || ' ' }}</span>
-              </div>
-              <div class="line-row">
-                <span class="mini">INSTRUCTIONS:</span><span class="line line--grow">{{ rs?.rdInstructions || ' ' }}</span>
-              </div>
-              <div class="line-row">
-                <span class="mini">COMPLETED BY:</span><span class="line">{{ userLabel(rs?.rdCompletedBy) || ' ' }}</span>
-                <span class="mini">DATE:</span><span class="line line--short">{{ fmt(rs?.rdCompletedOn) || ' ' }}</span>
-              </div>
-            </div>
-          </div>
-  
-          <!-- QC / Signature -->
-          <div class="row qc panel">
-            <div class="mini">ABOVE ITEMS RETURNED IN GOOD CONDITION:</div>
-            <span class="line line--short">{{ boolLabel(rs?.qcItemsGood) }}</span>
-            <span class="mini">SIGNATURE</span>
-            <span class="sigwrap line line--wide">
-              <img v-if="rs?.qcSignatureData" :src="rs.qcSignatureData" alt="Signature" />
-            </span>
-            <span class="mini">DATE:</span>
-            <span class="line line--short">{{ fmt(rs?.rdCompletedOn || rs?.dateFinished) || ' ' }}</span>
-          </div>
-        </div>
-  
-        <!-- Bottom Actions -->
-        <div class="footer-actions no-print">
-          <button class="btn" @click="doPrintImage">Print</button>
-          <button class="btn" @click="doPrintImage">Export to PDF</button>
-          <button class="btn" @click="shareLink">Share</button>
-          <span v-if="shareMsg" class="share-msg">{{ shareMsg }}</span>
-        </div>
+      <!-- Bottom Actions -->
+      <div class="footer-actions no-print">
+        <button class="btn" @click="doPrintImage">Print</button>
+        <button class="btn" @click="doPrintImage">Export to PDF</button>
+        <button class="btn" @click="shareLink">Share</button>
+        <span v-if="shareMsg" class="share-msg">{{ shareMsg }}</span>
       </div>
     </div>
-  </template>
-  
-<!-- client/src/views/RunSheetSingle.vue -->
+  </div>
+</template>
+
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import NavBar from '../components/NavBar.vue';
 import api from '../api.js';
-
+import { performLogout } from '../auth.js';
 import html2canvas from 'html2canvas';
 
 const route = useRoute();
+const router = useRouter();
+const slug = computed(() => String(route.params.slug || '').toLowerCase());
 
 const me = ref(null);
 const rs = ref(null);
 const sheetEl = ref(null);
 
-// NEW: production doc
-const production = ref(null);
-
-// Helpers
-const logout = () => auth.logout();
+/* ---------------- helpers ---------------- */
+function logout() {
+  performLogout(router, slug.value);
+}
 const safeSplitLines = (s) =>
   (s || '')
     .split(/\n|,/)
@@ -291,34 +288,19 @@ const safeSplitLines = (s) =>
     .filter(Boolean)
     .slice(0, 3);
 
-// ---- Company block (from MongoDB Production) ----
-const companyAddrLines = computed(() => safeSplitLines(
-  production.value?.productionaddress ?? production.value?.address ?? ''
-));
+/* ---------------- Company block (from Production) ----------------
+   Prefer new fields; fall back to virtuals and legacy.
+------------------------------------------------------------------ */
+const companyAddrLines = computed(() =>
+  safeSplitLines(
+    production.value?.productionaddress ??
+    production.value?.vAddress ??
+    production.value?.address ??
+    ''
+  )
+);
 
-const companyBlock = computed(() => {
-  const name =
-    production.value?.productioncompany
-    || production.value?.company
-    || production.value?.productionname
-    || production.value?.name
-    || ' ';
-  const title =
-    production.value?.productionname
-    || production.value?.name
-    || '';
-  return {
-    name,
-    showTitle: !!title && title !== name, // only show if distinct
-    title,
-    addr1: companyAddrLines.value[0] || '',
-    addr2: companyAddrLines.value[1] || '',
-    addr3: companyAddrLines.value[2] || '',
-    phone: production.value?.productionphone ?? production.value?.phone ?? ''
-  };
-});
-
-// ---- header helpers ----
+/* ---------------- header helpers ---------------- */
 const shortId = computed(() => (rs.value?._id ? rs.value._id.slice(-6) : ' '));
 const setLabel = computed(() => {
   const v = rs.value?.set;
@@ -327,7 +309,7 @@ const setLabel = computed(() => {
   return `${v.number || ''} ${v.name || ''}`.trim();
 });
 
-// ---- supplier (prefer rs.supplier; fallback to takeTo) ----
+/* ---------------- supplier (prefer rs.supplier; fallback to takeTo) ---------------- */
 const supplierObj = computed(() => {
   const v = rs.value?.supplier ?? rs.value?.takeTo ?? null;
   return (v && typeof v === 'object') ? v : null;
@@ -341,10 +323,9 @@ const supplierPhone   = computed(() => supplierObj.value?.phone || '');
 const supplierContact = computed(() => supplierObj.value?.contactName || '');
 const supplierHours   = computed(() => supplierObj.value?.hours || '');
 
-// ---- items -> table rows ----
+/* ---------------- items -> table rows ---------------- */
 const itemsFlat = computed(() => {
   const out = [];
-  // stops-based items (legacy)
   (rs.value?.stops || []).forEach(s => {
     (s.items || []).forEach(ri => {
       out.push({
@@ -353,9 +334,9 @@ const itemsFlat = computed(() => {
       });
     });
   });
-  // runsheet-level items
   (rs.value?.items || []).forEach(it => {
-    out.push({ item: `${it.name || 'Item'}${(it.quantity ?? it.qty) ? ' × ' + (it.quantity ?? it.qty) : ''}`, desc: it.description || '' });
+    const qty = it.quantity ?? it.qty;
+    out.push({ item: `${it.name || 'Item'}${qty ? ' × ' + qty : ''}`, desc: it.description || '' });
   });
   return out;
 });
@@ -366,7 +347,7 @@ const tableRows = computed(() => {
   return rows;
 });
 
-// ========= CONTACTS =========
+/* ---------------- contacts ---------------- */
 const contactPerson = ref(null);
 async function hydrateContactPerson() {
   const v = rs.value?.contact;
@@ -425,7 +406,7 @@ const contactRows = computed(() => {
   });
 });
 
-// ---- misc helpers ----
+/* ---------------- misc helpers ---------------- */
 function fmt(d){ if(!d) return ''; const dt=new Date(d); return isNaN(dt)?'':dt.toLocaleDateString(); }
 const boolLabel = (v) => (v === true ? 'YES' : v === false ? 'NO' : '—');
 const money = (n) => (typeof n === 'number' && isFinite(n))
@@ -433,9 +414,9 @@ const money = (n) => (typeof n === 'number' && isFinite(n))
   : '';
 const userLabel = (u) => (!u ? '' : (typeof u === 'string' ? ('#'+u) : (u.name || u.email || u._id || '')));
 
-// ---- share/print ----
+/* ---------------- share/print ---------------- */
 const shareMsg = ref('');
-const shareUrl = computed(() => `${location.origin}/runsheets/${route.params.id}`);
+const shareUrl = computed(() => `${location.origin}/${slug.value}/runsheetsview/${route.params.id}`);
 async function shareLink(){
   const url = shareUrl.value;
   try {
@@ -449,23 +430,65 @@ async function shareLink(){
   } catch {}
 }
 
-// ---- LOAD ----
+/* ---------------- load ---------------- */
+// --- DB-backed Production (by slug) ---
+const production = ref(null);
+
 async function loadProduction() {
-  const prodId = localStorage.getItem('currentProductionId') || '';
-  if (!prodId) { production.value = null; return; }
+  if (!slug.value) { production.value = null; return; }
   try {
-    // This hits /api/tenant/productions/:id and carries X-Production-Id in headers via api.js
-    production.value = await api.get(`/tenant/productions/${prodId}`);
+    // GET /api/productions/by-slug/:slug
+    production.value = await api.get(`/tenant/productions/by-slug/${encodeURIComponent(slug.value)}`);
+    console.log(production.value._id);
+    production.value = await(api.get(`/tenant/productions/${production.value._id}`))
   } catch {
     production.value = null;
   }
 }
 
+// Normalize any multiline/CSV address into one clean line
+function normalizeAddress(raw) {
+  if (!raw) return '';
+  const parts = String(raw)
+    .replace(/\r\n/g, '\n')
+    .split(/\n|,/)
+    .map(s => s.trim())
+    .filter(Boolean);
+  return parts.join(', ').replace(/\s*,\s*,+/g, ', ').replace(/\s{2,}/g, ' ').trim();
+}
+
+// Prefer new schema fields; fall back to virtuals; then legacy fields
+const companyBlock = computed(() => {
+  const p = production.value || {};
+  const name =
+    p.productioncompany ??
+    p.vCompanyName ??
+    p.company ??
+    p.title ??
+    ' ';
+  const title = p.title ?? p.vProductionTitle ?? '';
+  const address = normalizeAddress(
+    p.productionaddress ??
+    p.vAddress ??
+    p.address ??
+    ''
+  );
+  const phone = p.productionphone ?? p.vPhone ?? p.phone ?? '';
+  return {
+    name,
+    title,
+    showTitle: !!title && title !== name,
+    address,
+    phone
+  };
+});
+
 onMounted(async () => {
-  try { me.value = await auth.fetchMe(); } catch {}
+  try { me.value = await api.get('/me'); } catch {}
 
   await loadProduction();
 
+  // Runsheet remains tenant-scoped
   const data = await api.get(`/tenant/runsheets/${route.params.id}`);
   rs.value = data;
 
@@ -482,9 +505,10 @@ onMounted(async () => {
 
   await hydrateContactPerson();
 });
+watch(() => slug.value, loadProduction);
 watch(() => rs.value?.contact, hydrateContactPerson);
 
-// ---- PRINT AS 1-PAGE IMAGE (unchanged) ----
+/* ---------------- print as 1-page image ---------------- */
 async function doPrintImage() {
   const el = sheetEl.value;
   if (!el) return;
@@ -560,6 +584,8 @@ async function doPrintImage() {
   }
 }
 </script>
+
+
 
   
   

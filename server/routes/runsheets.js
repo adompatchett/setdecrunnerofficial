@@ -955,7 +955,7 @@ router.post('/:id/claim', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.post('/:id/assign', requireRole('admin'), async (req, res, next) => {
+router.post('/:id/assign', async (req, res, next) => {
   try {
     const { userId } = req.body || {};
     if (!userId) return res.status(400).json({ error: 'userId required' });

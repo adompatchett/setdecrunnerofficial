@@ -6,7 +6,7 @@
       <img src="/logo.png" alt="Set Dec Runner Logo" />
       <div class="nav__logo-texts">
         <span class="nav__logo-text">Set Dec Runner</span>
-        <div class="nav__production">
+        <div class="nav__production" :title="productionTooltip">
           {{ productionLabel }}
         </div>
       </div>
@@ -22,7 +22,41 @@
       <RouterLink class="nav__link" :to="{ name: 'places', params: { slug } }" draggable="false">Places</RouterLink>
       <RouterLink class="nav__link" :to="{ name: 'suppliers', params: { slug } }" draggable="false">Suppliers</RouterLink>
 
-      <!-- 🔑 Admin for this production (role in members OR owner) -->
+      <!-- Productions -->
+      <RouterLink
+        class="nav__link"
+        :to="{ name: 'productions', params: { slug } }"
+        draggable="false"
+      >
+        Productions
+      </RouterLink>
+      <RouterLink
+        v-if="canEditCurrent"
+        class="nav__link"
+        :to="{ name: 'production-edit', params: { slug, id: currentProdId } }"
+        draggable="false"
+      >
+        Production Settings
+      </RouterLink>
+      <RouterLink
+        v-if="canCreateProduction"
+        class="nav__link"
+        :to="{ name: 'production-new', params: { slug } }"
+        draggable="false"
+      >
+        New Production
+      </RouterLink>
+
+      <!-- Members/Admin -->
+      <RouterLink
+        v-if="showMembersLink"
+        :to="{ name: 'tenant-members', params: { slug } }"
+        class="nav__link"
+        draggable="false"
+      >
+        Members
+      </RouterLink>
+
       <RouterLink
         v-if="showAdminUsersLink"
         class="nav__link nav__link--admin"
@@ -30,13 +64,6 @@
         draggable="false"
       >
         Create Users
-      </RouterLink>
-
-      <RouterLink
-        :to="{ name: 'tenant-members', params: { slug: String($route.params.slug || '') } }"
-        class="btn"
-      >
-        Members
       </RouterLink>
     </div>
 
@@ -56,7 +83,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { performLogout } from '../auth.js';
 import { apiGet } from '../api.js';
@@ -65,8 +92,8 @@ const router = useRouter();
 const route  = useRoute();
 
 const props = defineProps({
-  me: { type: Object, default: null },          // expects {_id, email, ...}
-  company: { type: Object, default: null },     // { companyProduction: string }
+  me: { type: Object, default: null },
+  company: { type: Object, default: null },
 });
 defineEmits(['logout']);
 
@@ -78,12 +105,12 @@ const user = computed(() => {
   try { return JSON.parse(localStorage.getItem('user') || 'null'); }
   catch { return null; }
 });
-
 const currentUserId = computed(() => toId(user.value?._id || user.value));
 
 /* ---------------- production fetch (to inspect members/roles) ---------------- */
-const prod = ref(null);               // { _id, ownerUserId|owner, members:[...] }
+const prod = ref(null); // {_id, ownerUserId, title, productioncompany, members:[{user,role}] }
 const HEX24_RE = /^[a-f0-9]{24}$/i;
+
 function toId(v) {
   if (!v) return '';
   if (typeof v === 'string' || typeof v === 'number') {
@@ -101,32 +128,29 @@ const idsEqual = (a, b) => {
 };
 
 async function fetchProduction() {
+  if (!slug.value) { prod.value = null; return; }
   try {
-    // This endpoint should return the production by slug with members + owner fields
+    // Server should support fetching by slug
     const p = await apiGet(`/tenant/productions/${slug.value}`);
     prod.value = p || null;
 
-    // cache the id for other parts of the app that rely on x-production-id
     const pid = toId(p?._id);
     if (pid) localStorage.setItem('currentProductionId', pid);
   } catch {
     prod.value = null;
   }
 }
+watch(() => slug.value, fetchProduction);
 
-/* ---------------- admin check (members[].role === 'admin' or owner) ---------------- */
+/* ---------------- role checks ---------------- */
 const isOwner = computed(() => {
   const ownerId = toId(prod.value?.ownerUserId ?? prod.value?.owner);
   return !!ownerId && idsEqual(ownerId, currentUserId.value);
 });
-
 const isAdminByMembers = computed(() => {
   const members = prod.value?.members;
   if (!Array.isArray(members)) return false;
-
-  // Supports both shapes: [ObjectId] and [{ user:ObjectId, role: 'admin' | ... }]
   for (const m of members) {
-    // Object form
     if (m && typeof m === 'object') {
       const mid = toId(m.user ?? m._id ?? m.id ?? m);
       if (!mid) continue;
@@ -134,22 +158,37 @@ const isAdminByMembers = computed(() => {
         const role = String(m.role || '').toLowerCase();
         if (role === 'admin') return true;
       }
-    } else {
-      // Primitive id form: can't read role in this shape
-      // (skip; admin decision will rely on owner or global role if you choose)
-      continue;
     }
   }
   return false;
 });
 
-/* Final flag: show link if owner or admin (by members role) */
-const showAdminUsersLink = computed(() => isOwner.value || isAdminByMembers.value);
+const currentProdId = computed(() => toId(prod.value?._id));
+const canEditCurrent = computed(() => isOwner.value || isAdminByMembers.value);
+const canCreateProduction = computed(() => isOwner.value || isAdminByMembers.value); // adjust if anyone can create
+const showAdminUsersLink = computed(() => canEditCurrent.value);
+const showMembersLink    = computed(() => canEditCurrent.value);
 
 /* ---------------- presentation helpers ---------------- */
-const productionLabel = computed(() =>
-  props.company?.companyProduction || `/${slug.value}`
-);
+const productionLabel = computed(() => {
+  const p = prod.value || {};
+  return (
+    p.productioncompany ||
+    p.vCompanyName ||
+    p.title ||
+    props.company?.companyProduction ||
+    (slug.value ? `/${slug.value}` : '')
+  );
+});
+const productionTooltip = computed(() => {
+  const p = prod.value || {};
+  const lines = [];
+  if (p.title) lines.push(`Title: ${p.title}`);
+  if (p.productioncompany) lines.push(`Company: ${p.productioncompany}`);
+  if (p.productionaddress) lines.push(`Address: ${p.productionaddress}`);
+  if (p.productionphone) lines.push(`Phone: ${p.productionphone}`);
+  return lines.join('\n') || '';
+});
 
 const displayName = computed(() =>
   user.value?.name ||
@@ -204,6 +243,7 @@ function logout() {
 /* ---------------- lifecycle ---------------- */
 onMounted(fetchProduction);
 </script>
+
 
 <style scoped>
 .nav { display:flex; align-items:center; gap:16px; padding:10px 14px; border-bottom:1px solid #eee; background:#fff; }

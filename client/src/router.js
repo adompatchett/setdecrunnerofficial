@@ -7,28 +7,31 @@ import ProductPage from './views/ProductPage.vue';
 import ThankYou from './views/ThankYou.vue';
 import SlugLayout from './views/SlugApp.vue';
 import TenantLogin from './views/Login.vue';
-import TenantHome from './views/TenantHome.vue';
-import Members from './views/Members.vue';
 import Dashboard from './views/Dashboard.vue';
 
-const RunSheets       = () => import('./views/RunSheets.vue');
-const RunSheetSingle  = () => import('./views/RunSheetSingle.vue');
-const RunSheetEditor  = () => import('./views/RunSheetEditor.vue');
-const RunSheetsBeta   = () => import('./views/RunSheetsBeta.vue');
+// Lazy views
+const RunSheets        = () => import('./views/RunSheets.vue');
+const RunSheetSingle   = () => import('./views/RunSheetSingle.vue');
+const RunSheetEditor   = () => import('./views/RunSheetEditor.vue');
+const RunSheetsBeta    = () => import('./views/RunSheetsBeta.vue');
 
-const Suppliers       = () => import('./views/Suppliers.vue');
-const SupplierEditor  = () => import('./views/SupplierEditor.vue');
+const Suppliers        = () => import('./views/Suppliers.vue');
+const SupplierEditor   = () => import('./views/SupplierEditor.vue');
 
-const People          = () => import('./views/People.vue');
-const PeopleEditor    = () => import('./views/PeopleEditor.vue');
+const People           = () => import('./views/People.vue');
+const PeopleEditor     = () => import('./views/PeopleEditor.vue');
 
-const SetsList        = () => import('./views/SetsList.vue');
-const SetEditor       = () => import('./views/SetEditor.vue');
+const SetsList         = () => import('./views/SetsList.vue');
+const SetEditor        = () => import('./views/SetEditor.vue');
 
-const Driver          = () => import('./views/Driver.vue');
-const Items           = () => import('./views/Items.vue');
-const Places          = () => import('./views/Places.vue');
-const AdminUsers          = () => import('./views/AdminUsers.vue');
+const Driver           = () => import('./views/Driver.vue');
+const Items            = () => import('./views/Items.vue');
+const Places           = () => import('./views/Places.vue');
+const AdminUsers       = () => import('./views/AdminUsers.vue');
+
+// 🔥 New: Productions screens
+const Productions      = () => import('./views/Productions.vue');        // list/switcher
+const ProductionEditor = () => import('./views/ProductionEditor.vue');   // create/edit
 
 function getToken() {
   const t = localStorage.getItem('token');
@@ -85,7 +88,6 @@ const router = createRouter({
         return { name: 'marketing', replace: true };
       },
     },
-    
 
     {
       path: '/:slug',
@@ -109,11 +111,15 @@ const router = createRouter({
           component: TenantLogin,
           meta: { guestOnlyTenant: true },
         },
+
+        // ✅ Made relative so it nests correctly under /:slug
         {
-  path: '/:slug/members',
-  name: 'tenant-members',
-  component: () => import('./views/Members.vue'),
-},
+          path: 'members',
+          name: 'tenant-members',
+          component: () => import('./views/Members.vue'),
+          meta: { requiresAuth: true, requiresMembership: true },
+        },
+
         {
           path: '',
           name: 'tenant-home',
@@ -127,6 +133,7 @@ const router = createRouter({
             return true;
           },
         },
+
         // 🔓 Tenant-scoped logout
         {
           path: 'logout',
@@ -134,33 +141,57 @@ const router = createRouter({
           beforeEnter: (to) => {
             logout(); // clears token/user
             const slug = String(to.params.slug || '');
-            // go to the slug home; global guard will redirect to /:slug/login
             return { name: 'marketing', params: { slug }, replace: true };
           },
-          
         },
+
+        // ========== Productions (NEW) ==========
+        // List & switch productions (auth only; no membership gate so users can switch)
+        {
+          path: 'productions',
+          name: 'productions',
+          component: Productions,
+          meta: { requiresAuth: true },
+        },
+        // Create a new production (likely admin/owner only in the view’s own guard/UI)
+        {
+          path: 'productions/new',
+          name: 'production-new',
+          component: ProductionEditor,
+          meta: { requiresAuth: true },
+        },
+        // Edit an existing production by id (or slug depending on your view)
+        {
+          path: 'productions/:id',
+          name: 'production-edit',
+          component: ProductionEditor,
+          props: true,
+          meta: { requiresAuth: true },
+        },
+
+        // ========== Existing app screens ==========
         { path: 'runsheets',              name: 'runsheets',       component: RunSheets,      meta: { requiresAuth: true, requiresMembership: true } },
-{ path: 'runsheets/new',          name: 'runsheet-new',    component: RunSheetEditor, meta: { requiresAuth: true, requiresMembership: true } },
-{ path: 'runsheets/:id',          name: 'runsheet-edit',   component: RunSheetEditor, props: true, meta: { requiresAuth: true, requiresMembership: true } },
-{ path: 'runsheetsview/:id',      name: 'runsheet-view',   component: RunSheetSingle, props: true, meta: { requiresAuth: true, requiresMembership: true } },
-{ path: 'runsheets/:id/beta',     name: 'runsheet-beta',   component: RunSheetsBeta,  props: true, meta: { requiresAuth: true, requiresMembership: true } },
+        { path: 'runsheets/new',          name: 'runsheet-new',    component: RunSheetEditor, meta: { requiresAuth: true, requiresMembership: true } },
+        { path: 'runsheets/:id',          name: 'runsheet-edit',   component: RunSheetEditor, props: true, meta: { requiresAuth: true, requiresMembership: true } },
+        { path: 'runsheetsview/:id',      name: 'runsheet-view',   component: RunSheetSingle, props: true, meta: { requiresAuth: true, requiresMembership: true } },
+        { path: 'runsheets/:id/beta',     name: 'runsheet-beta',   component: RunSheetsBeta,  props: true, meta: { requiresAuth: true, requiresMembership: true } },
 
-{ path: 'suppliers',              name: 'suppliers',       component: Suppliers,      meta: { requiresAuth: true, requiresMembership: true } },
-{ path: 'suppliers/new',          name: 'supplier-new',    component: SupplierEditor, meta: { requiresAuth: true, requiresMembership: true } },
-{ path: 'suppliers/:id',          name: 'supplier-edit',   component: SupplierEditor, props: true, meta: { requiresAuth: true, requiresMembership: true } },
+        { path: 'suppliers',              name: 'suppliers',       component: Suppliers,      meta: { requiresAuth: true, requiresMembership: true } },
+        { path: 'suppliers/new',          name: 'supplier-new',    component: SupplierEditor, meta: { requiresAuth: true, requiresMembership: true } },
+        { path: 'suppliers/:id',          name: 'supplier-edit',   component: SupplierEditor, props: true, meta: { requiresAuth: true, requiresMembership: true } },
 
-{ path: 'people',                 name: 'people',          component: People,         meta: { requiresAuth: true, requiresMembership: true } },
-{ path: 'people/new',             name: 'person-new',      component: PeopleEditor,   meta: { requiresAuth: true, requiresMembership: true } },
-{ path: 'people/:id',             name: 'person-edit',     component: PeopleEditor,   props: true, meta: { requiresAuth: true, requiresMembership: true } },
+        { path: 'people',                 name: 'people',          component: People,         meta: { requiresAuth: true, requiresMembership: true } },
+        { path: 'people/new',             name: 'person-new',      component: PeopleEditor,   meta: { requiresAuth: true, requiresMembership: true } },
+        { path: 'people/:id',             name: 'person-edit',     component: PeopleEditor,   props: true, meta: { requiresAuth: true, requiresMembership: true } },
 
-{ path: 'sets',                   name: 'sets',            component: SetsList,       meta: { requiresAuth: true, requiresMembership: true } },
-{ path: 'sets/new',               name: 'set-new',         component: SetEditor,      meta: { requiresAuth: true, requiresMembership: true } },
-{ path: 'sets/:id',               name: 'set-edit',        component: SetEditor,      props: true, meta: { requiresAuth: true, requiresMembership: true } },
+        { path: 'sets',                   name: 'sets',            component: SetsList,       meta: { requiresAuth: true, requiresMembership: true } },
+        { path: 'sets/new',               name: 'set-new',         component: SetEditor,      meta: { requiresAuth: true, requiresMembership: true } },
+        { path: 'sets/:id',               name: 'set-edit',        component: SetEditor,      props: true, meta: { requiresAuth: true, requiresMembership: true } },
 
-{ path: 'driver',                 name: 'driver',          component: Driver,         meta: { requiresAuth: true, requiresMembership: true } },
-{ path: 'items',                  name: 'items',           component: Items,          meta: { requiresAuth: true, requiresMembership: true } },
-{ path: 'places',                 name: 'places',          component: Places,         meta: { requiresAuth: true, requiresMembership: true } },
-{ path: 'adminusers',                 name: 'admin-users',          component: AdminUsers,         meta: { requiresAuth: true, requiresMembership: true } },
+        { path: 'driver',                 name: 'driver',          component: Driver,         meta: { requiresAuth: true, requiresMembership: true } },
+        { path: 'items',                  name: 'items',           component: Items,          meta: { requiresAuth: true, requiresMembership: true } },
+        { path: 'places',                 name: 'places',          component: Places,         meta: { requiresAuth: true, requiresMembership: true } },
+        { path: 'adminusers',             name: 'admin-users',     component: AdminUsers,     meta: { requiresAuth: true, requiresMembership: true } },
       ],
     },
 
@@ -191,6 +222,7 @@ router.beforeEach((to) => {
     return { name: 'tenant-login', params: { slug }, query: { r: to.fullPath }, replace: true };
   }
 
+  // Membership gate only when explicitly requested by the route
   if (to.meta?.requiresMembership && !userHasProduction(prodId)) {
     return { name: 'tenant-login', params: { slug }, query: { r: to.fullPath, err: 'not-authorized' }, replace: true };
   }
@@ -199,5 +231,6 @@ router.beforeEach((to) => {
 });
 
 export default router;
+
 
 
