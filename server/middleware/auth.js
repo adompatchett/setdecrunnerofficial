@@ -33,6 +33,7 @@ export async function authRequired(req, res, next) {
     const token =
       hdr.startsWith('Bearer ') ? hdr.slice(7).trim() : (req.cookies?.token || '').trim();
 
+  
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
 
     let decoded;
@@ -43,7 +44,7 @@ export async function authRequired(req, res, next) {
     }
 
     const user = await User.findById(decoded.id)
-      .select('_id email name role siteAuthorized isAdmin banned productionIds')
+      .select('_id email name productionIds')
       .lean();
 
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -54,14 +55,13 @@ export async function authRequired(req, res, next) {
       _id: user._id,
       email: user.email,
       name: user.name,
-      role: user.role || 'user',
-      isAdmin: user.role === 'admin' || user.isAdmin === true, // global admin flag
-      siteAuthorized: !!user.siteAuthorized,
+      
       productionIds: user.productionIds || [],
     };
-
+ 
     next();
   } catch (e) {
+
     next(e);
   }
 }

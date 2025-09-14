@@ -16,26 +16,40 @@ import {
 const router = Router();
 const ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
 
-/**
- * Helper: standardize error responses
- */
+/* ----------------------------- helpers ----------------------------- */
 function sendError(res, code, msg) {
   return res.status(code).json({ error: msg });
 }
 
-/**
- * Probe which providers are enabled (optional, useful for the client)
- * GET /api/auth/providers -> { google: boolean, facebook: boolean }
- */
+// Normalize many ID shapes into a comparable string
+function toId(v) {
+  if (!v) return '';
+  if (typeof v === 'string' || typeof v === 'number') return String(v).trim();
+  // Prefer explicit fields
+  const maybe =
+    v._id ?? v.user ?? v.id ?? v.uid ?? v.userId ??
+    (typeof v.valueOf === 'function' ? v.valueOf() : null);
+  if (maybe) return String(maybe).trim();
+  // Last resort: toString that looks like an ObjectId
+  try {
+    const s = v.toString?.();
+    if (s && /^[a-f0-9]{24}$/i.test(s)) return s;
+  } catch (_) {}
+  return '';
+}
+
+function idsEqual(a, b) {
+  const A = toId(a);
+  const B = toId(b);
+  return !!A && !!B && A === B;
+}
+
+/* --------------------------- providers probe --------------------------- */
 router.get('/providers', (_req, res) => {
   res.json({ google: GOOGLE_ENABLED, facebook: FACEBOOK_ENABLED });
 });
 
-
-// ---------------------------
-// Local auth
-// ---------------------------
-
+/* -------------------------------- local -------------------------------- */
 // Register (local) — does NOT auto-join a production here
 router.post('/local/register', async (req, res) => {
   try {
@@ -98,11 +112,7 @@ router.post('/local/login', async (req, res) => {
   }
 });
 
-
-// ---------------------------
-// Google OAuth
-// ---------------------------
-
+/* ------------------------------ Google OAuth ------------------------------ */
 router.get('/google', (req, res, next) => {
   if (!GOOGLE_ENABLED) return sendError(res, 501, 'Google OAuth not configured');
 
@@ -137,11 +147,7 @@ router.get(
   }
 );
 
-
-// ---------------------------
-// Facebook OAuth
-// ---------------------------
-
+/* ----------------------------- Facebook OAuth ----------------------------- */
 router.get('/facebook', (req, res, next) => {
   if (!FACEBOOK_ENABLED) return sendError(res, 501, 'Facebook OAuth not configured');
 
@@ -176,32 +182,77 @@ router.get(
   }
 );
 
-
-// ---------------------------
-/** Me: return the current user profile (requires JWT) */
-// ---------------------------
+/* ------------------------------ /auth/me ------------------------------ */
+/**
+ * Returns the current user.
+ * If x-production-id header is provided, also includes:
+ *   - productionRole: 'admin' for owner, member role if set, or 'member'
+ *   - productionAccess: { isOwner: boolean, isMember: boolean }
+ *
+ * Works whether Production.members is:
+ *   - [ObjectId, ...]  OR
+ *   - [{ user: ObjectId, role?: string }, ...]
+ * Accepts owner in `ownerUserId` or `owner`.
+ */
 router.get('/me', authRequired, async (req, res) => {
-  const prodId = req.header('x-production-id');
-  let prodRole = null;
+  try {
+    const prodId = req.header('x-production-id');
+    let prodRole = null;
+    let isOwner = false;
+    let isMember = false;
 
-  if (prodId) {
-    const p = await Production.findById(prodId).select('ownerUserId members').lean();
-    if (p) {
-      const m = (p.members || []).find((r) => String(r.user) === String(req.user._id));
-      const isOwner = String(p.ownerUserId || '') === String(req.user._id);
-      prodRole = isOwner ? 'admin' : (m?.role || null);
+    if (prodId) {
+      const p = await Production.findById(prodId)
+        .select('_id ownerUserId owner members')
+        .lean();
+
+      if (p) {
+        const meId = toId(req.user._id);
+        const ownerId = p.ownerUserId ?? p.owner ?? null;
+        isOwner = !!ownerId && idsEqual(ownerId, meId);
+
+        // Inspect members whether ObjectIds or objects { user, role }
+        let foundRole = null;
+        if (Array.isArray(p.members) && p.members.length) {
+          for (const m of p.members) {
+            const memberId = toId(m?.user ?? m?._id ?? m?.id ?? m);
+            if (memberId && idsEqual(memberId, meId)) {
+              isMember = true;
+              if (m && typeof m === 'object' && m.role) foundRole = m.role;
+              break;
+            }
+          }
+        }
+
+        // Fallback membership via user's own productionIds (fetch if needed)
+        if (!isMember) {
+          let userProdIds = req.user.productionIds;
+          if (!Array.isArray(userProdIds)) {
+            const fresh = await User.findById(meId).select('_id productionIds').lean();
+            userProdIds = fresh?.productionIds || [];
+          }
+          isMember = (userProdIds || []).some((pid) => idsEqual(pid, p._id));
+        }
+
+        prodRole = isOwner ? 'admin' : (foundRole || (isMember ? 'member' : null));
+      }
     }
-  }
 
-  res.json({
-    _id: req.user._id,
-    email: req.user.email,
-    name: req.user.name,
-    role: req.user.role,
-    siteAuthorized: req.user.siteAuthorized,
-    productionIds: req.user.productionIds || [],
-    productionRole: prodRole, // << handy for UI
-  });
+    return res.json({
+      _id: req.user._id,
+      email: req.user.email,
+      name: req.user.name,
+      role: req.user.role,
+      siteAuthorized: req.user.siteAuthorized,
+      productionIds: req.user.productionIds || [],
+      productionRole: prodRole,
+      productionAccess: { isOwner, isMember },
+    });
+  } catch (e) {
+    return sendError(res, 500, e.message || 'Failed to load profile');
+  }
 });
 
 export default router;
+
+

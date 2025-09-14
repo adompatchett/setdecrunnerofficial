@@ -173,9 +173,26 @@
           <!-- PU/Delivering + Return/Drop Off -->
           <div class="row actions">
             <div class="panel act">
-              <div class="cap">
-                PICK UP/DELIVERING <span class="sp"></span> TAKE CHEQUE / CASH
-              </div>
+              <!-- PICK UP / DELIVERING  +  TAKE CHEQUE / CASH -->
+<div class="cap">
+  <span class="opt">PICK UP</span>
+  <span class="box" :class="{ checked: rs?.pdType === 'pickup' }"></span>
+
+  <span class="sp"></span>
+
+  <span class="opt">DELIVERING</span>
+  <span class="box" :class="{ checked: rs?.pdType === 'delivering' }"></span>
+
+  <span class="sp"></span>
+
+  <span class="opt">TAKE CHEQUE</span>
+  <span class="box" :class="{ checked: rs?.pdPaymentMethod === 'cheque' }"></span>
+
+  <span class="sp"></span>
+
+  <span class="opt">CASH</span>
+  <span class="box" :class="{ checked: rs?.pdPaymentMethod === 'cash' }"></span>
+</div>
               <div class="line-row">
                 <span class="mini">DATE:</span><span class="line">{{ fmt(rs?.pdDate) || ' ' }}</span>
                 <span class="mini">TIME:</span><span class="line line--short">{{ rs?.pdTime || ' ' }}</span>
@@ -190,10 +207,25 @@
             </div>
   
             <div class="panel act">
-              <div class="cap">
-                RETURN/DROP OFF <span class="sp"></span> PU/TAKE
-                <span class="sp"></span> CHEQUE <span class="box" :class="{checked: !!rs?.rdCheque}"></span>
-              </div>
+              <!-- RETURN / DROP OFF  +  PU / TAKE  +  CHEQUE -->
+<div class="cap">
+  RETURN / DROP OFF
+
+  <span class="sp"></span>
+
+  <span class="opt">PU</span>
+  <span class="box" :class="{ checked: rs?.rdType === 'pu' }"></span>
+
+  <span class="sp"></span>
+
+  <span class="opt">TAKE</span>
+  <span class="box" :class="{ checked: rs?.rdType === 'take' }"></span>
+
+  <span class="sp"></span>
+
+  CHEQUE
+  <span class="box" :class="{ checked: !!rs?.rdCheque }"></span>
+</div>
               <div class="line-row">
                 <span class="mini">DATE:</span><span class="line">{{ fmt(rs?.rdDate) || ' ' }}</span>
                 <span class="mini">TIME:</span><span class="line line--short">{{ rs?.rdTime || ' ' }}</span>

@@ -2,6 +2,7 @@
 import Production from '../models/Production.js';
 
 export async function requireMembership(req, res, next) {
+  
   try {
     const prodId =
       req.header('x-production-id') ||
@@ -11,11 +12,17 @@ export async function requireMembership(req, res, next) {
 
     if (!prodId) return res.status(400).json({ error: 'Missing production context' });
 
+    
+
+
     const prod = await Production.findById(prodId)
       .select('_id ownerUserId members title slug')
       .lean();
 
+      console.log(prod);
+
     if (!prod) return res.status(404).json({ error: 'Production not found' });
+
 
     const m = (prod.members || []).find((r) => String(r.user) === String(req.user._id));
     const isProdAdmin =

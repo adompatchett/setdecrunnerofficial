@@ -4,7 +4,7 @@
   
       <div class="container">
         <div class="row">
-          <RouterLink class="btn" to="/sets">Back to Sets</RouterLink>
+          <RouterLink class="nav__link" :to="{ name: 'sets', params: { slug } }" draggable="false">Back To Sets</RouterLink>
           <span class="spacer"></span>
           <button class="btn btn--danger" @click="destroy">Delete</button>
         </div>

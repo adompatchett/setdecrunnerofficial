@@ -3,6 +3,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import User from '../models/User.js';
 import { authRequired, requireRole } from '../middleware/auth.js';
+import { requireMembership } from '../middleware/requireMembership.js';
 
 // Mailer is optional; we’ll no-op if it’s missing or throws
 let sendMail = null;
@@ -24,6 +25,7 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 router.post(
   '/users',
   authRequired,
+  requireMembership,
   requireRole('admin'),
   async (req, res, next) => {
     try {

@@ -67,7 +67,12 @@
       <div class="modal__card">
         <div class="modal__head">
           <h3 class="title">{{ editing._id ? 'Edit Item' : 'New Item' }}</h3>
-          <button class="btn" @click="editing=null">Close</button>
+          <button
+  class="btn"
+  @click="() => { editing=null; $router.push(`/${slug}/items`) }"
+>
+  Close
+</button>
         </div>
 
         <div class="grid">

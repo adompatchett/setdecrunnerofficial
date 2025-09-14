@@ -762,39 +762,44 @@
   </div>
 
   <!-- Completed by (user) -->
-  <div class="row">
-    <h4 class="mini-title">Completed By</h4>
-    <div class="muted" v-if="completedByLabel">Current: {{ completedByLabel }}</div>
-  </div>
+  <!-- Completed by (user) -->
+<div class="row">
+  <h4 class="mini-title">Completed By</h4>
+  <div class="muted" v-if="completedByLabel">Current: {{ completedByLabel }}</div> <!-- CHANGED -->
+</div>
 
-  <div class="row row--tight">
-    <input v-model="cbSearch" placeholder="Search users…" class="input" />
-    <button type="button" class="btn" @click.stop.prevent="searchCompletedUsers">Search</button>
-    <button
-      v-if="rs.completedBy"
-      type="button"
-      class="btn btn--ghost"
-      @click.stop.prevent="clearCompletedBy"
-    >Unset</button>
-  </div>
+<div class="row row--tight">
+  <input v-model="cbSearch" placeholder="Search users…" class="input" />
+  <button type="button" class="btn" @click.stop.prevent="searchCompletedUsers">Search</button>
+  <button
+    v-if="rs.pdCompletedBy"  <!-- CHANGED -->
+    type="button"
+    class="btn btn--ghost"
+    @click.stop.prevent="clearCompletedBy"
+  >Unset</button>
+</div>
 
-  <div class="pillbar">
-    <button
-      v-for="u in cbResults"
-      :key="u._id"
-      class="pill"
-      type="button"
-      @click.stop.prevent="selectCompletedBy(u)"
-    >
-      Use {{ u.name || u.email }}
-    </button>
-  </div>
+<div class="pillbar">
+  <button
+    v-for="u in cbResults"
+    :key="u._id"
+    class="pill"
+    type="button"
+    @click.stop.prevent="selectCompletedBy(u)"
+  >
+    Use {{ u.name || u.email }}
+  </button>
+</div>
 
-  <!-- Date finished -->
-  <div class="field">
-    <label class="label" for="pd-finished">Date Finished</label>
-    <input id="pd-finished" type="date" v-model="dateFinishedStr" @change="savePickupDelivering" />
-  </div>
+<div class="field">
+  <input
+    type="date"
+    v-model="dateFinishedStr"
+    @change="savePickupDelivering"
+  />
+</div>
+
+ 
 </section>
 
 <!-- Return / Drop Off -->
@@ -870,8 +875,10 @@
   </div>
 
   <div class="row row--tight">
-    <input v-model="cbSearch" placeholder="Search users…" class="input" />
-    <button type="button" class="btn" @click.stop.prevent="searchCompletedUsers">Search</button>
+    <input v-model="cbSearch" placeholder="Search users…" class="input" @input="debouncedSearchCompletedUsers" />
+<button type="button" class="btn" @click.stop.prevent="searchCompletedUsers" :disabled="cbSearching">
+  {{ cbSearching ? 'Searching…' : 'Search' }}
+</button>
     <button
       v-if="rs.rdCompletedBy"
       type="button"
@@ -1059,8 +1066,8 @@ const rs = ref({
   pdDate: null,
   pdTime: '',
   pdInstructions: '',
-  completedBy: null,      // legacy UI
-  dateFinished: null,     // legacy UI
+  pdCompletedBy: null,      // legacy UI
+  pdCompletedOn: null,     // legacy UI
 
   // Return / Drop Off
   rdType: null,
@@ -1282,7 +1289,7 @@ async function createAndAddItem() {
       name: newItem.value.name.trim(),
       ...(newItem.value.description?.trim() ? { description: newItem.value.description.trim() } : {})
     };
-    const created = await api.post('/items', body);
+    const created = await api.post('/tenant/items', body);
 
     // 2) If a photo was chosen, upload to /items/:id/photos (field "photos")
     if (newItem.value.file) {
@@ -1338,13 +1345,13 @@ const onPurchaseTypeChanged = async (ev) => {
 const cbSearch = ref('');
 const cbResults = ref([]);
 const searchCompletedUsers = async () => {
-  try { cbResults.value = await api.get('/tenant/users', { q: cbSearch.value }); }
+  try { cbResults.value = await api.get('/tenant/users/',); }
   catch (e) { error.value = e?.response?.data?.error || 'Failed to search users'; }
 };
-const selectCompletedBy = async (u) => { if (!rs.value) return; rs.value.completedBy = u; await savePickupDelivering(); };
-const clearCompletedBy = async () => { if (!rs.value) return; rs.value.completedBy = null; await savePickupDelivering(); };
+const selectCompletedBy = async (u) => { if (!rs.value) return; rs.value.pdCompletedBy = u; await savePickupDelivering(); };
+const clearCompletedBy = async () => { if (!rs.value) return; rs.value.pdCompletedBy = null; await savePickupDelivering(); };
 const completedByLabel = computed(() => {
-  const v = rs.value && rs.value.completedBy;
+  const v = rs.value && rs.value.pdCompletedBy;
   if (!v) return '';
   if (typeof v === 'string') { const hit = cbResults.value.find(x => x._id === v); return hit ? (hit.name || hit.email || hit._id) : `#${v}`; }
   return v.name || v.email || v._id || '';
@@ -1383,8 +1390,8 @@ const load = async () => {
     if (rs.value.pdDate == null) rs.value.pdDate = null;
     if (rs.value.pdTime == null) rs.value.pdTime = '';
     if (rs.value.pdInstructions == null) rs.value.pdInstructions = '';
-    if (rs.value.completedBy == null) rs.value.completedBy = null; // legacy UI
-    if (rs.value.dateFinished == null) rs.value.dateFinished = null; // legacy UI
+    if (rs.value.pdCompletedBy == null) rs.value.pdCompletedBy = null; // legacy UI
+    if (rs.value.pdCompletedOn == null) rs.value.pdCompletedOn = null; // legacy UI
 
     if (rs.value.getInvoice == null) rs.value.getInvoice = false;
     if (rs.value.getDeposit == null) rs.value.getDeposit = false;
@@ -1530,8 +1537,13 @@ const pdDateStr = computed({
   set(v) { if (rs.value) rs.value.pdDate = v ? new Date(v).toISOString() : null; }
 });
 const dateFinishedStr = computed({
-  get() { const d = rs.value && rs.value.dateFinished && new Date(rs.value.dateFinished); return d && !isNaN(d) ? d.toISOString().slice(0,10) : ''; },
-  set(v) { if (rs.value) rs.value.dateFinished = v ? new Date(v).toISOString() : null; }
+  get() {
+    const d = rs.value?.pdCompletedOn && new Date(rs.value.pdCompletedOn);
+    return d && !isNaN(d) ? d.toISOString().slice(0,10) : '';
+  },
+  set(v) {
+    if (rs.value) rs.value.pdCompletedOn = v ? new Date(v).toISOString() : null;
+  }
 });
 const savePickupDelivering = async () => {
   if (!rs.value || !rs.value._id) return;
@@ -1542,13 +1554,14 @@ const savePickupDelivering = async () => {
       pdDate: rs.value.pdDate ?? null,
       pdTime: rs.value.pdTime || '',
       pdInstructions: rs.value.pdInstructions || '',
+      pdCompletedBy: (rs.value.pdCompletedBy && rs.value.pdCompletedBy._id) ?? rs.value.pdCompletedBy ?? null,
+      pdCompletedOn: rs.value.pdCompletedOn ?? null,
     });
     stamp();
   } catch (e) {
     error.value = e?.response?.data?.error || 'Failed to save pickup/delivering';
   }
 };
-
 /* ======================== Validate & Save core ======================== */
 const validateBeforeSave = () => {
   if (rs.value && rs.value.purchaseType === 'rental') {
@@ -1614,6 +1627,8 @@ const save = async () => {
       pdDate: rs.value.pdDate ?? null,
       pdTime: rs.value.pdTime || '',
       pdInstructions: rs.value.pdInstructions || '',
+      pdCompletedBy:rs.value.pdCompletedBy,
+      pdCompletedOn:rs.value.pdCompletedOn,
       rdType: rs.value.rdType ?? null,
       rdCheque: !!rs.value.rdCheque,
       rdDate: rs.value.rdDate ?? null,
@@ -1938,13 +1953,18 @@ async function createSupplier() {
 
 /* ============================ Misc ============================ */
 const mapsUrl = (lat, lng) => `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+// Prefer route param, then tenant store, then a safe default
+const slug = computed(() => route.params.slug ?? tenant.slug ?? 'demo')
 
-const goToRunsheets = () => {
-  router.push({ path: '/runsheets' }).catch(() => {
-    const base = (router && router.options && router.options.history && router.options.history.base || '').replace(/\/$/, '');
-    location.assign(`${base}/runsheets`);
-  });
-};
+// Used by the Back to list button
+function goToRunsheets() {
+  if (router.hasRoute('runsheets')) {
+    router.push({ name: 'runsheets', params: { slug: slug.value } })
+  } else {
+    // Fallback if you don’t have a named route
+    router.push(`/${slug.value}/runsheets`)
+  }
+}
 const goToRunsheetView = () => {
   const id = rs.value && rs.value._id; if (!id) return;
   router.push({ name: 'runsheet-view', params: { id } })

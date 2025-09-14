@@ -15,14 +15,13 @@
           <div class="spacer"></div>
 
           <div class="actions">
-            <RouterLink class="btn" to="/driver">Driver Mode</RouterLink>
-            <RouterLink class="btn" to="/runsheets">All Run Sheets</RouterLink>
-            <RouterLink class="btn" to="/items">Items</RouterLink>
-            <RouterLink class="btn" to="/places">Places</RouterLink>
-            <RouterLink v-if="me?.role==='admin'" class="btn" to="/admin/users">Admin</RouterLink>
-            <button class="btn btn--primary" @click="createRS" :disabled="creating">
-              {{ creating ? 'Creating…' : 'New Run Sheet' }}
-            </button>
+            <RouterLink class="nav__link" :to="{ name: 'driver', params: { slug } }" draggable="false">Driver</RouterLink>
+           
+            <RouterLink class="nav__link" :to="{ name: 'runsheets', params: { slug } }" draggable="false">Runsheets</RouterLink>
+            <RouterLink class="nav__link" :to="{ name: 'items', params: { slug } }" draggable="false">Items</RouterLink>
+            <RouterLink class="nav__link" :to="{ name: 'places', params: { slug } }" draggable="false">Dashboard</RouterLink>
+            <RouterLink v-if="me?.role==='admin'" class="btn" :to="{ name: 'admin/users', params: { slug } }">Items</RouterLink>
+            <RouterLink class="nav__link" :to="{ name: 'runsheet-new', params: { slug } }" draggable="false">Create Runsheet</RouterLink>
           </div>
         </div>
         <p class="muted">Use the shortcuts above to jump right in.</p>

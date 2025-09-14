@@ -97,7 +97,12 @@
         <div class="modal__card">
           <div class="modal__head">
             <h3 class="title">{{ creatingNew ? 'New Place' : (editing._id ? 'Edit Place' : 'New Place') }}</h3>
-            <button class="btn" @click="editing=null">Close</button>
+            <button
+  class="btn"
+  @click="() => { editing=null; $router.push(`/${slug}/places`) }"
+>
+  Close
+</button>
           </div>
 
           <!-- Google Places inside editor -->

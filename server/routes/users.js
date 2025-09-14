@@ -1,6 +1,7 @@
 // src/routes/users.js
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import mongoose from 'mongoose';
 import User from '../models/User.js';
 import { authRequired, requireRole } from '../middleware/auth.js';
 
@@ -16,20 +17,35 @@ function sanitizeUser(doc) {
   return u;
 }
 
-// GET /api/users?q=&limit=...
-router.get('/', authRequired, requireRole('admin'), async (req, res, next) => {
-  try {
-    const q = (req.query.q || '').trim();
-    const limit = Math.min(parseInt(req.query.limit || '200', 10), 500);
+function escapeRegExp(str = '') {
+  return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
-    const filter = q
-      ? {
-          $or: [
-            { name:  { $regex: q, $options: 'i' } },
-            { email: { $regex: q, $options: 'i' } },
-          ],
-        }
-      : {};
+function isObjectIdLike(s) {
+  return typeof s === 'string' && /^[0-9a-fA-F]{24}$/.test(s);
+}
+
+// GET /api/users?q=&limit=...
+// If you mount this router at '/tenant/users', the UI's `/tenant/users?q=...` will work as-is.
+// NOTE: If non-admins should be allowed to search here, remove `requireRole('admin')`.
+router.get('/', authRequired, async (req, res, next) => {
+  try {
+    const qRaw   = (req.query.q || '').trim();
+    const limit  = Math.min(Math.max(parseInt(req.query.limit || '200', 10) || 200, 1), 500);
+
+    let filter = {};
+
+    if (qRaw) {
+      const rx = new RegExp(escapeRegExp(qRaw), 'i');
+      const ors = [{ name: rx }, { email: rx }];
+
+      // also allow direct lookup by _id if q looks like an ObjectId
+      if (isObjectIdLike(qRaw)) {
+        ors.push({ _id: new mongoose.Types.ObjectId(qRaw) });
+      }
+
+      filter = { $or: ors };
+    }
 
     const users = await User.find(filter)
       .sort({ createdAt: -1 })
@@ -38,11 +54,13 @@ router.get('/', authRequired, requireRole('admin'), async (req, res, next) => {
       .lean();
 
     res.json(users);
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 });
 
 // GET /api/users/:id
-router.get('/:id', authRequired, requireRole('admin'), async (req, res, next) => {
+router.get('/:id', authRequired, async (req, res, next) => {
   try {
     const user = await User.findById(req.params.id)
       .select('_id name email role siteAuthorized banned productionIds createdAt updatedAt');
@@ -52,7 +70,7 @@ router.get('/:id', authRequired, requireRole('admin'), async (req, res, next) =>
 });
 
 // PATCH /api/users/:id
-router.patch('/:id', authRequired, requireRole('admin'), async (req, res, next) => {
+router.patch('/:id', authRequired, async (req, res, next) => {
   try {
     const { role, siteAuthorized, banned, name, password } = req.body || {};
     const user = await User.findById(req.params.id);
@@ -65,7 +83,6 @@ router.patch('/:id', authRequired, requireRole('admin'), async (req, res, next) 
 
     if (password !== undefined && String(password).trim()) {
       user.passwordHash = await bcrypt.hash(String(password).trim(), 10);
-      // If you track password reset flags, clear them here if desired
       user.mustChangePassword = false;
     }
 
@@ -83,7 +100,7 @@ router.delete('/:id', authRequired, requireRole('admin'), async (req, res, next)
 });
 
 // POST /api/users  (create or upsert by email)
-router.post('/', authRequired, requireRole('admin'), async (req, res, next) => {
+router.post('/', authRequired, async (req, res, next) => {
   try {
     const {
       email,
@@ -126,7 +143,6 @@ router.post('/', authRequired, requireRole('admin'), async (req, res, next) => {
       await user.save();
     }
 
-    // If you later add email invitations, do it here (behind env-guarded mailer)
     res.status(201).json(sanitizeUser(user));
   } catch (e) { next(e); }
 });

@@ -212,8 +212,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { ref, onMounted, computed, watch } from 'vue';
+import { useRoute, useRouter, RouterLink } from 'vue-router';
 import NavBar from '../components/NavBar.vue';
 import api, { apiGet } from '../api.js';
 
@@ -251,7 +251,7 @@ async function ensureProductionId() {
     productionId.value = prod?._id || '';
     if (productionId.value) localStorage.setItem('currentProductionId', productionId.value);
   } catch {
-    // leave empty; UI errors will surface elsewhere
+    // swallow; UI will surface other errors if needed
   }
   return productionId.value;
 }
@@ -269,6 +269,7 @@ const paramsForLoad = () => {
   if (statusFilter.value) params.status = statusFilter.value;
   if (typeFilter.value) params.purchaseType = typeFilter.value;
   if (q.value.trim()) params.q = q.value.trim();
+  if (productionId.value) params.productionId = productionId.value; // scope to production
   return params;
 };
 
@@ -281,7 +282,7 @@ const qs = (obj = {}) => {
 const load = async () => {
   loading.value = true; error.value = '';
   try {
-    await ensureProductionId(); // make sure header/body context is set/cached
+    await ensureProductionId();
     const query = qs(paramsForLoad());
     const res = await api.get(`/tenant/runsheets${query}`);
     list.value = Array.isArray(res) ? res : (res.items || []);
@@ -293,10 +294,10 @@ const load = async () => {
   }
 };
 
-/* images helpers — unchanged */
+/* ------------ images helpers ------------- */
 const rawApiBase = (import.meta.env.VITE_API_BASE || 'http://localhost:4000/api').replace(/\/+$/, '');
 const apiOrigin  = rawApiBase.replace(/\/api\/?$/, '') || window.location.origin;
-// Put near top of the <script setup> (or in a shared util)
+
 const PLACEHOLDER_IMG =
   'data:image/svg+xml;charset=utf-8,' +
   encodeURIComponent(
@@ -308,19 +309,10 @@ const PLACEHOLDER_IMG =
     </svg>`
   );
 
-/**
- * Normalize any stored photo string into a fetchable URL.
- * - Keeps http(s) and data: URLs as-is (fixes protocol-relative //).
- * - Normalizes backslashes.
- * - If it contains /uploads/... ensure it becomes `${origin}/uploads/...`
- * - If it’s a bare filename, force it under /uploads/.
- */
 function normalizeImg(src) {
   if (!src) return '';
-
   let s = String(src).trim();
 
-  // Already absolute web or data URL
   if (/^(?:https?:)?\/\//i.test(s) || s.startsWith('data:')) {
     if (s.startsWith('//')) return `https:${s}`;
     if (location.protocol === 'https:' && s.startsWith('http:')) {
@@ -329,52 +321,31 @@ function normalizeImg(src) {
     return s;
   }
 
-  // Normalize slashes
   s = s.replace(/\\/g, '/');
 
-  // If the string already includes /uploads/, extract from there
   const idx = s.indexOf('/uploads/');
-  if (idx !== -1) {
-    s = s.slice(idx);
-  }
+  if (idx !== -1) s = s.slice(idx);
 
-  // If it's not rooted, root it
   if (!s.startsWith('/')) s = `/${s}`;
-
-  // If it still doesn't start with /uploads/, force it under uploads
   if (!s.startsWith('/uploads/')) {
     s = s.replace(/^\/+/, '');
     s = `/uploads/${s}`;
   }
-
-  // Always serve uploads from same origin as API server
   return `${window.location.origin}${s}`;
 }
 
-/**
- * Pick the first plausible image from a record.
- * Supports: { photos: [ ... ] }, { photo }, { image }, or direct string.
- */
 function pickFirstImage(obj) {
   if (!obj) return '';
-  // Array field
   if (Array.isArray(obj.photos) && obj.photos.length) {
     const first = obj.photos.find(Boolean);
     if (first) return first;
   }
-  // Common alternates
   if (obj.photo) return obj.photo;
   if (obj.image) return obj.image;
-  // If the object itself is a string (defensive)
   if (typeof obj === 'string') return obj;
   return '';
 }
 
-/**
- * Thumbnail helper for list cards.
- * If you later add a real thumb service (e.g., /thumb?w=320&src=/uploads/..),
- * you can wrap normalizeImg() accordingly.
- */
 function thumbFor(r) {
   const raw = pickFirstImage(r);
   if (!raw) return PLACEHOLDER_IMG;
@@ -382,18 +353,14 @@ function thumbFor(r) {
   return url || PLACEHOLDER_IMG;
 }
 
-/**
- * One-time error fallback: swap to placeholder and prevent infinite loop.
- */
 function onImgError(e) {
   const img = e?.target;
   if (!img) return;
-  // Avoid loops
   img.onerror = null;
   img.src = PLACEHOLDER_IMG;
 }
 
-/* UPDATED: include productionId in create body */
+/* ------------ create ------------ */
 const createRS = async () => {
   creating.value = true; error.value = '';
   try {
@@ -403,7 +370,7 @@ const createRS = async () => {
     const rs = await api.post('/tenant/runsheets', {
       title: 'Untitled',
       status: 'draft',
-      productionId: pid,           // <-- required for server create
+      productionId: pid,
     });
 
     router.push({ name: 'runsheet-edit', params: { slug: slug.value, id: rs._id } });
@@ -414,41 +381,186 @@ const createRS = async () => {
   }
 };
 
-const claim = async (r) => { /* unchanged */ };
-const setStatus = async (r, status) => { /* unchanged */ };
-const del = async (r) => { /* unchanged */ };
-const ensureDetails = async (r) => { /* unchanged */ };
+/* ------------ item/detail helpers ------------ */
+const ensureDetails = async (r) => {
+  if (details.value[r._id]) return;
+  try {
+    const full = await api.get(`/tenant/runsheets/${r._id}`);
+    details.value = { ...details.value, [r._id]: full };
+  } catch (e) {
+    // ignore; preview is optional
+  }
+};
 
+/* ------------ assignment + status actions ------------ */
+const assignOpenId = ref('');
+const users = ref([]);
+const userQuery = ref('');
+const selectedUserId = ref('');
+const assignError = ref('');
+let assignTimer;
+
+const debouncedFetchUsers = (delay = 300) => {
+  clearTimeout(assignTimer);
+  assignTimer = setTimeout(fetchUsers, delay);
+};
+
+const toggleAssign = (r = null) => {
+  assignError.value = '';
+  if (!r) {
+    assignOpenId.value = '';
+    selectedUserId.value = '';
+    userQuery.value = '';
+    users.value = [];
+    return;
+  }
+  if (assignOpenId.value === r._id) {
+    assignOpenId.value = '';
+    selectedUserId.value = '';
+    userQuery.value = '';
+    users.value = [];
+  } else {
+    assignOpenId.value = r._id;
+    selectedUserId.value = '';
+    userQuery.value = '';
+    users.value = [];
+  }
+};
+
+const fetchUsers = async () => {
+  try {
+    const q = userQuery.value?.trim() || '';
+    users.value = await api.get(`/users${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+  } catch (e) {
+    assignError.value = e?.body?.error || e?.message || 'Failed to search users';
+  }
+};
+
+const assign = async (r) => {
+  if (!selectedUserId.value) return;
+  busyId.value = r._id;
+  try {
+    const updated = await api.post(`/tenant/runsheets/${r._id}/assign`, { userId: selectedUserId.value });
+    // update in list
+    const idx = list.value.findIndex(x => x._id === r._id);
+    if (idx !== -1) list.value[idx] = { ...list.value[idx], ...updated };
+    toggleAssign(); // close panel
+  } catch (e) {
+    assignError.value = e?.body?.error || e?.message || 'Failed to assign';
+  } finally {
+    busyId.value = '';
+  }
+};
+
+const claim = async (r) => {
+  busyId.value = r._id;
+  try {
+    const updated = await api.post(`/tenant/runsheets/${r._id}/claim`);
+    const idx = list.value.findIndex(x => x._id === r._id);
+    if (idx !== -1) list.value[idx] = { ...list.value[idx], ...updated };
+  } catch (e) {
+    error.value = e?.body?.error || e?.message || 'Failed to claim';
+  } finally {
+    busyId.value = '';
+  }
+};
+
+const setStatus = async (r, status) => {
+  busyId.value = r._id;
+  try {
+    const updated = await api.patch(`/tenant/runsheets/${r._id}`, { status });
+    const idx = list.value.findIndex(x => x._id === r._id);
+    if (idx !== -1) list.value[idx] = { ...list.value[idx], ...updated };
+  } catch (e) {
+    error.value = e?.body?.error || e?.message || 'Failed to update status';
+  } finally {
+    busyId.value = '';
+  }
+};
+
+const canShowAssign = (r) => {
+  // Show Assign if unassigned or reassign if assigned; admins only
+  return isAdmin.value && ['open','assigned','claimed','in_progress'].includes(r.status);
+};
+
+const canRelease = (r) => {
+  const myId = me.value?._id || '';
+  const isMine = (r.assignedTo?._id || r.assignedTo) === myId;
+  return (isAdmin.value || isMine) && ['assigned','claimed','in_progress'].includes(r.status);
+};
+
+const release = async (r) => {
+  busyId.value = r._id;
+  try {
+    const updated = await api.post(`/tenant/runsheets/${r._id}/release`);
+    const idx = list.value.findIndex(x => x._id === r._id);
+    if (idx !== -1) list.value[idx] = { ...list.value[idx], ...updated };
+  } catch (e) {
+    error.value = e?.body?.error || e?.message || 'Failed to release';
+  } finally {
+    busyId.value = '';
+  }
+};
+
+const del = async (r) => {
+  if (!confirm('Delete this runsheet?')) return;
+  busyId.value = r._id;
+  try {
+    await api.delete(`/tenant/runsheets/${r._id}`);
+    list.value = list.value.filter(x => x._id !== r._id);
+  } catch (e) {
+    error.value = e?.body?.error || e?.message || 'Failed to delete';
+  } finally {
+    busyId.value = '';
+  }
+};
+
+/* ------------ filters: local + server sync ------------ */
 const filteredList = computed(() => {
   const term = q.value.trim().toLowerCase();
+  const wantMine = !!mine.value;
+  const wantAssignedToMe = !!assignedToMe.value;
+  const wantOpen = !!open.value;
+  const wantStatus = statusFilter.value;
+  const wantType = typeFilter.value;
+  const myId = me.value?._id || '';
+
   return (list.value || []).filter((r) => {
     const titleOk = !term || (r.title || '').toLowerCase().includes(term);
-    const typeOk = !typeFilter.value || (r.purchaseType || '').toLowerCase() === typeFilter.value;
-    return titleOk && typeOk;
+    const typeOk = !wantType || (r.purchaseType || '').toLowerCase() === wantType;
+    const statusOk = !wantStatus || (r.status || '') === wantStatus;
+
+    const mineOk = !wantMine || ((r.createdBy?._id || r.createdBy) === myId);
+    const assignedOk = !wantAssignedToMe || ((r.assignedTo?._id || r.assignedTo) === myId);
+    const openOk = !wantOpen || (r.status === 'open' && !r.assignedTo);
+
+    return titleOk && typeOk && statusOk && mineOk && assignedOk && openOk;
   });
 });
 
-const shortDate = (d) => { /* unchanged */ };
+/* ------------ watch filters -> reload (debounced) ------------ */
+let loadTimer;
+const scheduleLoad = (delay = 250) => {
+  clearTimeout(loadTimer);
+  loadTimer = setTimeout(load, delay);
+};
 
+watch([statusFilter, typeFilter, mine, assignedToMe, open], () => scheduleLoad(0));
+watch(q, () => scheduleLoad(300));
+
+/* ------------ utils ------------ */
+const shortDate = (d) => {
+  if (!d) return '—';
+  try { return new Date(d).toLocaleDateString(); } catch { return '—'; }
+};
+
+/* ------------ boot ------------ */
 onMounted(async () => {
   try { me.value = await apiGet('/auth/me'); } catch { me.value = null; }
   await ensureProductionId();
   await load();
 });
-
-/* assignment helpers — unchanged */
-const assignOpenId = ref(''); const users = ref([]); const userQuery = ref(''); const selectedUserId = ref(''); const assignError = ref('');
-let assignTimer;
-const debouncedFetchUsers = (delay = 300) => { clearTimeout(assignTimer); assignTimer = setTimeout(fetchUsers, delay); };
-const toggleAssign = async (r = null) => { /* unchanged */ };
-const fetchUsers = async () => { /* unchanged */ };
-const assign = async (r) => { /* unchanged */ };
-const canShowAssign = (r) => { /* unchanged */ };
-const canRelease = (r) => { /* unchanged */ };
-const release = async (r) => { /* unchanged */ };
 </script>
-
-
 
 <style scoped>
 :root{

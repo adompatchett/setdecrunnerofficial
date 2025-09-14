@@ -28,6 +28,7 @@ const SetEditor       = () => import('./views/SetEditor.vue');
 const Driver          = () => import('./views/Driver.vue');
 const Items           = () => import('./views/Items.vue');
 const Places          = () => import('./views/Places.vue');
+const AdminUsers          = () => import('./views/AdminUsers.vue');
 
 function getToken() {
   const t = localStorage.getItem('token');
@@ -159,6 +160,7 @@ const router = createRouter({
 { path: 'driver',                 name: 'driver',          component: Driver,         meta: { requiresAuth: true, requiresMembership: true } },
 { path: 'items',                  name: 'items',           component: Items,          meta: { requiresAuth: true, requiresMembership: true } },
 { path: 'places',                 name: 'places',          component: Places,         meta: { requiresAuth: true, requiresMembership: true } },
+{ path: 'adminusers',                 name: 'admin-users',          component: AdminUsers,         meta: { requiresAuth: true, requiresMembership: true } },
       ],
     },
 

@@ -4,7 +4,13 @@
   
       <div class="container">
         <div class="row">
-          <RouterLink class="btn" to="/suppliers">Back to Suppliers</RouterLink>
+          <RouterLink
+                  class="link"
+                  :to="{ name: 'suppliers', params: { slug } }"
+                >
+                  
+                  Back To Suppliers
+                </RouterLink>
           <span class="spacer"></span>
           <button class="btn btn--danger" v-if="!isNew" @click="destroy">Delete</button>
         </div>

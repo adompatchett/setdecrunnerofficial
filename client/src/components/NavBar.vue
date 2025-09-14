@@ -22,9 +22,9 @@
       <RouterLink class="nav__link" :to="{ name: 'places', params: { slug } }" draggable="false">Places</RouterLink>
       <RouterLink class="nav__link" :to="{ name: 'suppliers', params: { slug } }" draggable="false">Suppliers</RouterLink>
 
-      <!-- 🔑 Admin-only -->
+      <!-- 🔑 Admin for this production (role in members OR owner) -->
       <RouterLink
-        v-if="userRole === 'admin'"
+        v-if="showAdminUsersLink"
         class="nav__link nav__link--admin"
         :to="{ name: 'admin-users', params: { slug } }"
         draggable="false"
@@ -32,9 +32,12 @@
         Create Users
       </RouterLink>
 
-      <RouterLink :to="{ name: 'tenant-members', params: { slug: String($route.params.slug || '') } }" class="btn">
-  Members
-</RouterLink>
+      <RouterLink
+        :to="{ name: 'tenant-members', params: { slug: String($route.params.slug || '') } }"
+        class="btn"
+      >
+        Members
+      </RouterLink>
     </div>
 
     <!-- User Info + Logout -->
@@ -47,41 +50,106 @@
         draggable="false"
       />
       <span class="nav__name" :title="displayName">{{ displayName }}</span>
-     <button class="btn" @click="logout">Logout</button>
+      <button class="btn" @click="logout">Logout</button>
     </div>
   </nav>
 </template>
 
 <script setup>
-import { computed } from 'vue';
-import { RouterLink, useRoute } from 'vue-router';
+import { ref, computed, onMounted } from 'vue';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { performLogout } from '../auth.js';
-import { useRouter } from 'vue-router';
-
+import { apiGet } from '../api.js';
 
 const router = useRouter();
 const route  = useRoute();
 
 const props = defineProps({
-  me: { type: Object, default: null },
-  company: { type: Object, default: null }, // { companyProduction: string }
+  me: { type: Object, default: null },          // expects {_id, email, ...}
+  company: { type: Object, default: null },     // { companyProduction: string }
 });
 defineEmits(['logout']);
 
 const slug = computed(() => String(route.params.slug || ''));
 
-// Read user from prop or localStorage
+/* ---------------- read user (prop or localStorage) ---------------- */
 const user = computed(() => {
   if (props.me) return props.me;
   try { return JSON.parse(localStorage.getItem('user') || 'null'); }
   catch { return null; }
 });
-const userRole = computed(() => user.value?.role || '');
 
-// Production label (use provided company label or fallback to /:slug)
-const productionLabel = computed(() => {
-  return props.company?.companyProduction || `/${slug.value}`;
+const currentUserId = computed(() => toId(user.value?._id || user.value));
+
+/* ---------------- production fetch (to inspect members/roles) ---------------- */
+const prod = ref(null);               // { _id, ownerUserId|owner, members:[...] }
+const HEX24_RE = /^[a-f0-9]{24}$/i;
+function toId(v) {
+  if (!v) return '';
+  if (typeof v === 'string' || typeof v === 'number') {
+    const s = String(v).trim();
+    return HEX24_RE.test(s) ? s : '';
+  }
+  if (Array.isArray(v)) return toId(v[0]);
+  const nested = v._id ?? v.user ?? v.id ?? v.userId ?? v.uid ?? v.$oid ?? (typeof v.valueOf === 'function' ? v.valueOf() : null);
+  if (nested && nested !== v) return toId(nested);
+  try { const s = v.toString?.(); return HEX24_RE.test(s) ? s : ''; } catch { return ''; }
+}
+const idsEqual = (a, b) => {
+  const A = toId(a), B = toId(b);
+  return !!A && !!B && A === B;
+};
+
+async function fetchProduction() {
+  try {
+    // This endpoint should return the production by slug with members + owner fields
+    const p = await apiGet(`/tenant/productions/${slug.value}`);
+    prod.value = p || null;
+
+    // cache the id for other parts of the app that rely on x-production-id
+    const pid = toId(p?._id);
+    if (pid) localStorage.setItem('currentProductionId', pid);
+  } catch {
+    prod.value = null;
+  }
+}
+
+/* ---------------- admin check (members[].role === 'admin' or owner) ---------------- */
+const isOwner = computed(() => {
+  const ownerId = toId(prod.value?.ownerUserId ?? prod.value?.owner);
+  return !!ownerId && idsEqual(ownerId, currentUserId.value);
 });
+
+const isAdminByMembers = computed(() => {
+  const members = prod.value?.members;
+  if (!Array.isArray(members)) return false;
+
+  // Supports both shapes: [ObjectId] and [{ user:ObjectId, role: 'admin' | ... }]
+  for (const m of members) {
+    // Object form
+    if (m && typeof m === 'object') {
+      const mid = toId(m.user ?? m._id ?? m.id ?? m);
+      if (!mid) continue;
+      if (idsEqual(mid, currentUserId.value)) {
+        const role = String(m.role || '').toLowerCase();
+        if (role === 'admin') return true;
+      }
+    } else {
+      // Primitive id form: can't read role in this shape
+      // (skip; admin decision will rely on owner or global role if you choose)
+      continue;
+    }
+  }
+  return false;
+});
+
+/* Final flag: show link if owner or admin (by members role) */
+const showAdminUsersLink = computed(() => isOwner.value || isAdminByMembers.value);
+
+/* ---------------- presentation helpers ---------------- */
+const productionLabel = computed(() =>
+  props.company?.companyProduction || `/${slug.value}`
+);
 
 const displayName = computed(() =>
   user.value?.name ||
@@ -101,13 +169,11 @@ const rawPhoto = computed(() => {
     u.profile?.picture || u.profile?.photos?.[0]?.value || ''
   );
 });
-
 const rawApiBase = (import.meta.env.VITE_API_BASE || 'http://localhost:4000/api').replace(/\/+$/, '');
 const apiOrigin  = rawApiBase.replace(/\/api\/?$/, '') || window.location.origin;
 
 function normalizePhoto(p) {
   if (!p) return '';
-  // Absolute / data:
   if (/^(?:https?:)?\/\//i.test(p) || p.startsWith('data:')) {
     if (p.startsWith('//')) return `https:${p}`;
     if (location.protocol === 'https:' && p.startsWith('http:')) p = p.replace(/^http:/i, 'https:');
@@ -120,7 +186,6 @@ function normalizePhoto(p) {
     } catch {}
     return p;
   }
-  // Relative: serve via API origin /uploads/*
   let s = String(p).replace(/\\/g, '/');
   const idx = s.indexOf('/uploads/');
   if (idx !== -1) s = s.slice(idx);
@@ -128,13 +193,16 @@ function normalizePhoto(p) {
   if (!s.startsWith('/uploads/')) s = s.replace(/^\/+/, '/uploads/');
   return `${apiOrigin}${s}`;
 }
+const photoSrc = computed(() => normalizePhoto(rawPhoto.value));
 
+/* ---------------- actions ---------------- */
 function logout() {
-  const slug = String(route.params.slug || '');
-  performLogout(router, slug);
+  const s = String(route.params.slug || '');
+  performLogout(router, s);
 }
 
-const photoSrc = computed(() => normalizePhoto(rawPhoto.value));
+/* ---------------- lifecycle ---------------- */
+onMounted(fetchProduction);
 </script>
 
 <style scoped>

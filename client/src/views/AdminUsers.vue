@@ -9,6 +9,7 @@
           v-model="q"
           placeholder="Search users (name or email)"
           class="input"
+          @keyup.enter="load"
         />
         <button class="btn btn--primary" @click="load" :disabled="loading">
           {{ loading ? 'Searching…' : 'Search' }}
@@ -27,81 +28,87 @@
         </span>
       </div>
 
+      <!-- Access gate -->
+      <div v-if="!checked" class="muted">Checking permissions…</div>
+      <div v-else-if="!allowed" class="error">Admins only for this production.</div>
+
       <!-- List -->
-      <div v-if="loading" class="muted">Loading…</div>
+      <div v-else>
+        <div v-if="loading" class="muted">Loading…</div>
 
-      <div v-else class="table-wrap card">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>User</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th>Authorized</th>
-              <th>Banned</th>
-              <th>Provider</th>
-              <th>Created</th>
-              <th class="text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="u in list" :key="u._id">
-              <td>
-                <div class="usercell">
-                  <img v-if="u.photo" :src="u.photo" class="avatar" alt="" />
-                  <div class="truncate">{{ u.name || '—' }}</div>
-                </div>
-              </td>
-              <td class="truncate email">{{ u.email || '—' }}</td>
-              <td>
-                <select
-                  class="select"
-                  v-model="u.role"
-                  :disabled="savingId===u._id || isSelf(u)"
-                  @change="save(u)"
-                >
-                  <option value="admin">admin</option>
-                  <option value="driver">driver</option>
-                  <option value="user">user</option>
-                </select>
-              </td>
-              <td>
-                <label class="check">
-                  <input type="checkbox" v-model="u.siteAuthorized" :disabled="savingId===u._id || isSelf(u)" @change="save(u)" />
-                  <span class="pill" :class="u.siteAuthorized ? 'pill--ok' : 'pill--muted'">
-                    {{ u.siteAuthorized ? 'Yes' : 'No' }}
-                  </span>
-                </label>
-              </td>
-              <td>
-                <label class="check">
-                  <input type="checkbox" v-model="u.banned" :disabled="savingId===u._id || isSelf(u)" @change="save(u)" />
-                  <span class="pill" :class="u.banned ? 'pill--danger' : 'pill--ok'">
-                    {{ u.banned ? 'Banned' : 'Active' }}
-                  </span>
-                </label>
-              </td>
-              <td class="ucase small">{{ u.oauthProvider || u.provider || 'local' }}</td>
-              <td class="small">{{ shortDate(u.createdAt) }}</td>
-              <td class="text-right">
-                <button class="btn btn--ghost" @click="view(u)">View</button>
-                <button
-                  class="btn btn--danger"
-                  :disabled="savingId===u._id || isSelf(u)"
-                  @click="removeUser(u)"
-                >Remove</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div v-else class="table-wrap card">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Authorized</th>
+                <th>Banned</th>
+                <th>Provider</th>
+                <th>Created</th>
+                <th class="text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="u in list" :key="u._id">
+                <td>
+                  <div class="usercell">
+                    <img v-if="u.photo" :src="u.photo" class="avatar" alt="" />
+                    <div class="truncate">{{ u.name || '—' }}</div>
+                  </div>
+                </td>
+                <td class="truncate email">{{ u.email || '—' }}</td>
+                <td>
+                  <select
+                    class="select"
+                    v-model="u.role"
+                    :disabled="savingId===u._id || isSelf(u)"
+                    @change="save(u)"
+                  >
+                    <option value="admin">admin</option>
+                    <option value="driver">driver</option>
+                    <option value="user">user</option>
+                  </select>
+                </td>
+                <td>
+                  <label class="check">
+                    <input type="checkbox" v-model="u.siteAuthorized" :disabled="savingId===u._id || isSelf(u)" @change="save(u)" />
+                    <span class="pill" :class="u.siteAuthorized ? 'pill--ok' : 'pill--muted'">
+                      {{ u.siteAuthorized ? 'Yes' : 'No' }}
+                    </span>
+                  </label>
+                </td>
+                <td>
+                  <label class="check">
+                    <input type="checkbox" v-model="u.banned" :disabled="savingId===u._id || isSelf(u)" @change="save(u)" />
+                    <span class="pill" :class="u.banned ? 'pill--danger' : 'pill--ok'">
+                      {{ u.banned ? 'Banned' : 'Active' }}
+                    </span>
+                  </label>
+                </td>
+                <td class="ucase small">{{ u.oauthProvider || u.provider || 'local' }}</td>
+                <td class="small">{{ shortDate(u.createdAt) }}</td>
+                <td class="text-right">
+                  <button class="btn btn--ghost" @click="view(u)">View</button>
+                  <button
+                    class="btn btn--danger"
+                    :disabled="savingId===u._id || isSelf(u)"
+                    @click="removeUser(u)"
+                  >Remove</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
 
-        <div v-if="!list.length" class="empty muted">
-          No users match your search.
+          <div v-if="!list.length" class="empty muted">
+            No users match your search.
+          </div>
         </div>
-      </div>
 
-      <p v-if="error" class="error">{{ error }}</p>
-      <p v-if="notice" class="notice">{{ notice }}</p>
+        <p v-if="error" class="error">{{ error }}</p>
+        <p v-if="notice" class="notice">{{ notice }}</p>
+      </div>
     </div>
 
     <!-- Profile Modal -->
@@ -209,11 +216,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import NavBar from '../components/NavBar.vue';
 import { useAuth } from '../auth.js';
-import api from '../api.js';
+import api, { apiGet } from '../api.js';
+import { useRoute } from 'vue-router';
 
+const route = useRoute();
 const auth = useAuth();
 const me = ref(null);
 
@@ -241,8 +250,82 @@ const createForm = ref({
 const createError = ref('');
 const createMsg = ref('');
 
-const logout = () => auth.logout();
+/* ---------- production/admin gate ---------- */
+const slug = computed(() => String(route.params.slug || ''));
 
+const prod = ref(null);
+const checked = ref(false);
+const allowed = ref(false);
+const resolvedProdId = ref(localStorage.getItem('currentProductionId') || '');
+
+const HEX24 = /^[a-f0-9]{24}$/i;
+function toId(v) {
+  if (!v) return '';
+  if (typeof v === 'string' || typeof v === 'number') {
+    const s = String(v).trim();
+    return HEX24.test(s) ? s : '';
+  }
+  if (Array.isArray(v)) return toId(v[0]);
+  const nested = v._id ?? v.user ?? v.id ?? v.userId ?? v.uid ?? v.$oid ?? (typeof v.valueOf === 'function' ? v.valueOf() : null);
+  if (nested && nested !== v) return toId(nested);
+  try { const s = v.toString?.(); return HEX24.test(s) ? s : ''; } catch { return ''; }
+}
+const idsEqual = (a, b) => {
+  const A = toId(a), B = toId(b);
+  return !!A && !!B && A === B;
+};
+
+async function ensureProduction() {
+  try {
+    const p = await apiGet(`/tenant/productions/${slug.value}`);
+    prod.value = p || null;
+    const pid = toId(p?._id);
+    if (pid) {
+      resolvedProdId.value = pid;
+      localStorage.setItem('currentProductionId', pid);
+    }
+  } catch {
+    prod.value = null;
+  }
+}
+
+function isAdminForProduction(userId) {
+ 
+  if (!prod.value) return false;
+  const ownerId = toId(prod.value.ownerUserId ?? prod.value.owner);
+  if (ownerId && idsEqual(ownerId, userId)) return true;
+
+  const mem = prod.value.members || [];
+  for (const m of mem) {
+    const mid = toId(m?.user ?? m?._id ?? m);
+    if (!mid) continue;
+    if (idsEqual(mid, userId)) {
+      const role = String(m?.role || '').toLowerCase();
+      return role === 'admin';
+    }
+  }
+  return false;
+}
+
+/* ---------- request helpers ---------- */
+function prodIdHeader() {
+  const pid = String(resolvedProdId.value || '').trim();
+  return HEX24.test(pid) ? { 'x-production-id': pid } : {};
+}
+function userIdHeader() {
+  const uid = toId(me.value?._id || me.value);
+  return HEX24.test(uid) ? { 'x-user-id': uid } : {};
+}
+function authHeaders() {
+  return { ...prodIdHeader(), ...userIdHeader() };
+}
+function qs(obj = {}) {
+  const s = new URLSearchParams(obj).toString();
+  return s ? `?${s}` : '';
+}
+
+/* ---------- utilities ---------- */
+const logout = () => auth.logout();
 const stamp = () => { lastUpdated.value = new Date().toLocaleTimeString(); };
 
 const shortDate = (d) => {
@@ -255,13 +338,17 @@ const longDate = (d) => {
   const dt = new Date(d);
   return isNaN(dt) ? '—' : dt.toLocaleString();
 };
+const isSelf = (u) => me.value && u?._id === me.value._id;
 
-const isSelf = (u) => me.value && u._id === me.value._id;
-
+/* ---------- data actions ---------- */
 const load = async () => {
+  if (!allowed.value) return;
   loading.value = true; error.value = '';
   try {
-    list.value = await api.get('/users', { q: q.value });
+    const headers = authHeaders();
+    const query = q.value ? { q: q.value } : {};
+    // GET with query string + headers
+    list.value = await api.get('/tenant/users' + qs(query), { headers });
     stamp();
   } catch (e) {
     error.value = e?.response?.data?.error || e.message || 'Failed to load users';
@@ -275,8 +362,9 @@ const reset = async () => { q.value = ''; await load(); };
 const save = async (u) => {
   savingId.value = u._id; error.value = '';
   try {
+    const headers = authHeaders();
     const body = { role: u.role, siteAuthorized: !!u.siteAuthorized, banned: !!u.banned };
-    const updated = await api.patch(`/tenant/users/${u._id}`, body);
+    const updated = await api.patch(`/tenant/users/${u._id}`, body, { headers });
     Object.assign(u, updated);
     notice.value = 'Changes saved';
     setTimeout(() => (notice.value = ''), 1200);
@@ -303,7 +391,8 @@ const removeUser = async (u) => {
   if (!confirm(`Remove user "${u.name || u.email || 'account'}"? This cannot be undone.`)) return;
   savingId.value = u._id; error.value = '';
   try {
-    await api.del(`/tenant/users/${u._id}`);
+    const headers = authHeaders();
+    await api.del(`/tenant/users/${u._id}`, { headers });
     list.value = list.value.filter(x => x._id !== u._id);
   } catch (e) {
     error.value = e?.response?.data?.error || 'Failed to remove user';
@@ -315,7 +404,8 @@ const removeUser = async (u) => {
 
 const view = async (u) => {
   try {
-    active.value = await api.get(`/tenant/users/${u._id}`);
+    const headers = authHeaders();
+    active.value = await api.get(`/tenant/users/${u._id}`, { headers });
   } catch (e) {
     error.value = e?.response?.data?.error || 'Failed to load profile';
   }
@@ -323,14 +413,15 @@ const view = async (u) => {
 
 const reloadSingle = async (id) => {
   try {
-    const fresh = await api.get(`/tenant/users/${id}`);
+    const headers = authHeaders();
+    const fresh = await api.get(`/tenant/users/${id}`, { headers });
     const idx = list.value.findIndex(u => u._id === id);
     if (idx >= 0) list.value[idx] = fresh;
     if (active.value?._id === id) active.value = fresh;
   } catch { /* ignore */ }
 };
 
-// ---- Create user modal handlers ----
+/* ---- Create user modal handlers ---- */
 const openCreate = () => {
   createError.value = '';
   createMsg.value = '';
@@ -348,7 +439,8 @@ const createUser = async () => {
     if (!createForm.value.email) { createError.value = 'Email is required'; return; }
     creating.value = true;
 
-    // IMPORTANT: This hits the admin invite endpoint that issues an email + reset link
+    const headers = authHeaders();
+    // Endpoint that creates + invites; adjust path if your server uses a different one
     await api.post('/tenant/admin/users', {
       firstName: createForm.value.firstName || undefined,
       lastName:  createForm.value.lastName  || undefined,
@@ -356,10 +448,10 @@ const createUser = async () => {
       username:  createForm.value.username || undefined,
       role:      createForm.value.role,
       siteAuthorized: !!createForm.value.siteAuthorized
-    });
+    }, { headers });
 
     createMsg.value = 'Invitation sent';
-    await load();            // refresh list so the new user appears
+    await load();            // refresh list
     setTimeout(() => { closeCreate(); }, 600);
   } catch (e) {
     createError.value = e?.response?.data?.error || e.message || 'Failed to create user';
@@ -368,13 +460,16 @@ const createUser = async () => {
   }
 };
 
+/* ---------- lifecycle ---------- */
 onMounted(async () => {
   me.value = await auth.fetchMe();
-  if (me.value?.role !== 'admin') {
-    error.value = 'Admins only';
-    return;
-  }
-  await load();
+  await ensureProduction();
+
+  // production admin gate (owner or member role === 'admin')
+  allowed.value = apiGet('/auth/me');
+  checked.value = true;
+
+  if (allowed.value) await load();
 });
 </script>
 
