@@ -271,11 +271,12 @@ import PublicFooter from '../components/PublicFooter.vue';
 .info a { color: #000; text-decoration: underline; text-decoration-thickness: 2px; }
 
 /* ---------------- CTA stripe -------------------------------- */
-.stripe { padding: 46px 0 78px; }
+.stripe { padding: 46px 0px 78px; }
 .stripe__inner {
   text-align: center; padding: 34px; border-radius: 16px;
   background: linear-gradient(180deg, #fff, #f2f2f2);
   border: 1px solid var(--line); box-shadow: 0 12px 34px rgba(0,0,0,.10);
+  margin:10px;
 }
 .stripe__inner h2 { margin: 0 0 10px; }
 .stripe__inner p { color: var(--ink-3); margin: 0 0 16px; }
