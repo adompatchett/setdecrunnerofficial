@@ -238,6 +238,7 @@ app.get('/api/stripe/check', async (_req, res) => {
 
 // Create Checkout Session
 app.post('/api/checkout/session', async (req, res) => {
+  console.log(req.body);
   try {
     const { title, desiredSlug } = req.body || {};
     const cleanTitle = String(title || '').trim();

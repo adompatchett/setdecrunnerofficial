@@ -5,12 +5,12 @@ import App from './App.vue';
 import router from './router.js';
 
 
-import ProductPage from './views/ProductPage.vue';
 import ThankYou from './views/ThankYou.vue';
 import SlugApp from './views/SlugApp.vue';
+import Public from './views/Public.vue'
 
 const routes = [
-  { path: '/', name: 'product', component: ProductPage },
+  { path: '/', name: 'product', component: Public },
   { path: '/thank-you', name: 'thank-you', component: ThankYou },
   { path: '/:slug', name: 'tenant', component: SlugApp }
 ];

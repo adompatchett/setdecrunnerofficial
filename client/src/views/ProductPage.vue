@@ -82,12 +82,14 @@
       </details>
     </section>
   </div>
+  <PublicFooter/>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue';
 import PublicNav from '../components/PublicNav.vue';
 import { apiPost } from '../api.js';
+import PublicFooter from '../components/PublicFooter.vue';
 
 const title = ref('');
 const slug  = ref('');

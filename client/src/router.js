@@ -33,6 +33,14 @@ const AdminUsers       = () => import('./views/AdminUsers.vue');
 const Productions      = () => import('./views/Productions.vue');        // list/switcher
 const ProductionEditor = () => import('./views/ProductionEditor.vue');   // create/edit
 
+//Public
+
+const Public = () => import('./views/Public.vue'); 
+const Pricing = () => import('./views/Pricing.vue');
+const Features = () => import('./views/Features.vue');
+const FAQ = () => import('./views/FAQ.vue');
+const Purchase = import('./views/Purchase.vue')
+
 function getToken() {
   const t = localStorage.getItem('token');
   return t && t !== 'undefined' && t !== 'null' ? t : '';
@@ -74,8 +82,12 @@ const router = createRouter({
   history: createWebHistory(),
   scrollBehavior: () => ({ top: 0 }),
   routes: [
-    { path: '/', name: 'marketing', component: ProductPage },
+    { path: '/', name: 'marketing', component: Public },
     { path: '/thank-you', name: 'thank-you', component: ThankYou },
+    {path:'/pricing',name:"pricing",component:Pricing},
+    {path:'/purchase',name:"purchase",component:Purchase},
+    {path:'/features',name:"features",component:Features},
+    {path:'/FAQ',name:"FAQ",component:FAQ},
 
     // 🔓 Global logout (works anywhere)
     {
